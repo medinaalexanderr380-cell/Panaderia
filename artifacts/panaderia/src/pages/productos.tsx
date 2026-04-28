@@ -100,7 +100,7 @@ export default function Productos() {
 
   const onSubmit = (data: ProductoFormValues) => {
     if (editingProducto) {
-      actualizarMutation.mutate({ id: editingProducto.id, data: { ...data, proveedorId: data.proveedorId || undefined } });
+      actualizarMutation.mutate({ codigo: editingProducto.codigo, data: { ...data, proveedorId: data.proveedorId || undefined } });
     } else {
       crearMutation.mutate({ data: { ...data, proveedorId: data.proveedorId || undefined } });
     }
@@ -374,7 +374,7 @@ export default function Productos() {
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancelar</AlertDialogCancel>
                             <AlertDialogAction 
-                              onClick={() => eliminarMutation.mutate({ id: producto.id })}
+                              onClick={() => eliminarMutation.mutate({ codigo: producto.codigo })}
                               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             >
                               Eliminar

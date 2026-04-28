@@ -337,6 +337,57 @@ paths:
               schema:
                 $ref: "#/components/schemas/Venta"
 
+  /ventas/dia/{fecha}:
+    get:
+      operationId: listarVentasPorDia
+      tags: [ventas]
+      summary: Get all sales for a specific day (YYYY-MM-DD)
+      parameters:
+        - name: fecha
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sales for day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResumenDia"
+    delete:
+      operationId: eliminarVentasDia
+      tags: [ventas]
+      summary: Delete all sales for a specific day
+      parameters:
+        - name: fecha
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MensajeResponse"
+
+  /ventas/dias:
+    get:
+      operationId: listarDiasConVentas
+      tags: [ventas]
+      summary: List all days that have sales, with daily totals
+      responses:
+        "200":
+          description: Days with sales
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ResumenDia"
+
   /ventas/{id}:
     get:
       operationId: obtenerVenta
@@ -355,6 +406,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Venta"
+    delete:
+      operationId: eliminarVenta
+      tags: [ventas]
+      summary: Delete a single sale by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MensajeResponse"
 
   /compras:
     get:
@@ -642,6 +710,23 @@ components:
           type: string
         proveedorId:
           type: integer
+
+    ResumenDia:
+      type: object
+      properties:
+        fecha:
+          type: string
+        totalVentas:
+          type: number
+        totalGanancia:
+          type: number
+        cantidadVentas:
+          type: integer
+        ventas:
+          type: array
+          items:
+            $ref: "#/components/schemas/Venta"
+      required: [fecha, totalVentas, totalGanancia, cantidadVentas, ventas]
 
     Venta:
       type: object

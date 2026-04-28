@@ -106,6 +106,14 @@ export interface Venta {
   items: ItemVenta[];
 }
 
+export interface ResumenDia {
+  fecha: string;
+  totalVentas: number;
+  totalGanancia: number;
+  cantidadVentas: number;
+  ventas: Venta[];
+}
+
 export interface ItemVentaInput {
   productoCodigo: string;
   cantidad: number;

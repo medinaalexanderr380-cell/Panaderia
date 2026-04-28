@@ -33,6 +33,7 @@ import type {
   RegistrarCompraBody,
   RegistrarVentaBody,
   ReporteVendedor,
+  ResumenDia,
   ResumenFinanciero,
   ResumenProveedor,
   TopProducto,
@@ -1410,6 +1411,253 @@ export const useRegistrarVenta = <
 };
 
 /**
+ * @summary Get all sales for a specific day (YYYY-MM-DD)
+ */
+export const getListarVentasPorDiaUrl = (fecha: string) => {
+  return `/api/ventas/dia/${fecha}`;
+};
+
+export const listarVentasPorDia = async (
+  fecha: string,
+  options?: RequestInit,
+): Promise<ResumenDia> => {
+  return customFetch<ResumenDia>(getListarVentasPorDiaUrl(fecha), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListarVentasPorDiaQueryKey = (fecha: string) => {
+  return [`/api/ventas/dia/${fecha}`] as const;
+};
+
+export const getListarVentasPorDiaQueryOptions = <
+  TData = Awaited<ReturnType<typeof listarVentasPorDia>>,
+  TError = ErrorType<unknown>,
+>(
+  fecha: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listarVentasPorDia>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListarVentasPorDiaQueryKey(fecha);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listarVentasPorDia>>
+  > = ({ signal }) => listarVentasPorDia(fecha, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!fecha,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listarVentasPorDia>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListarVentasPorDiaQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listarVentasPorDia>>
+>;
+export type ListarVentasPorDiaQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get all sales for a specific day (YYYY-MM-DD)
+ */
+
+export function useListarVentasPorDia<
+  TData = Awaited<ReturnType<typeof listarVentasPorDia>>,
+  TError = ErrorType<unknown>,
+>(
+  fecha: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listarVentasPorDia>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListarVentasPorDiaQueryOptions(fecha, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Delete all sales for a specific day
+ */
+export const getEliminarVentasDiaUrl = (fecha: string) => {
+  return `/api/ventas/dia/${fecha}`;
+};
+
+export const eliminarVentasDia = async (
+  fecha: string,
+  options?: RequestInit,
+): Promise<MensajeResponse> => {
+  return customFetch<MensajeResponse>(getEliminarVentasDiaUrl(fecha), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getEliminarVentasDiaMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof eliminarVentasDia>>,
+    TError,
+    { fecha: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof eliminarVentasDia>>,
+  TError,
+  { fecha: string },
+  TContext
+> => {
+  const mutationKey = ["eliminarVentasDia"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof eliminarVentasDia>>,
+    { fecha: string }
+  > = (props) => {
+    const { fecha } = props ?? {};
+
+    return eliminarVentasDia(fecha, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EliminarVentasDiaMutationResult = NonNullable<
+  Awaited<ReturnType<typeof eliminarVentasDia>>
+>;
+
+export type EliminarVentasDiaMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete all sales for a specific day
+ */
+export const useEliminarVentasDia = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof eliminarVentasDia>>,
+    TError,
+    { fecha: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof eliminarVentasDia>>,
+  TError,
+  { fecha: string },
+  TContext
+> => {
+  return useMutation(getEliminarVentasDiaMutationOptions(options));
+};
+
+/**
+ * @summary List all days that have sales, with daily totals
+ */
+export const getListarDiasConVentasUrl = () => {
+  return `/api/ventas/dias`;
+};
+
+export const listarDiasConVentas = async (
+  options?: RequestInit,
+): Promise<ResumenDia[]> => {
+  return customFetch<ResumenDia[]>(getListarDiasConVentasUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListarDiasConVentasQueryKey = () => {
+  return [`/api/ventas/dias`] as const;
+};
+
+export const getListarDiasConVentasQueryOptions = <
+  TData = Awaited<ReturnType<typeof listarDiasConVentas>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listarDiasConVentas>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListarDiasConVentasQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listarDiasConVentas>>
+  > = ({ signal }) => listarDiasConVentas({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listarDiasConVentas>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListarDiasConVentasQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listarDiasConVentas>>
+>;
+export type ListarDiasConVentasQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all days that have sales, with daily totals
+ */
+
+export function useListarDiasConVentas<
+  TData = Awaited<ReturnType<typeof listarDiasConVentas>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listarDiasConVentas>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListarDiasConVentasQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Get sale by id
  */
 export const getObtenerVentaUrl = (id: number) => {
@@ -1495,6 +1743,90 @@ export function useObtenerVenta<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Delete a single sale by id
+ */
+export const getEliminarVentaUrl = (id: number) => {
+  return `/api/ventas/${id}`;
+};
+
+export const eliminarVenta = async (
+  id: number,
+  options?: RequestInit,
+): Promise<MensajeResponse> => {
+  return customFetch<MensajeResponse>(getEliminarVentaUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getEliminarVentaMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof eliminarVenta>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof eliminarVenta>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["eliminarVenta"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof eliminarVenta>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return eliminarVenta(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EliminarVentaMutationResult = NonNullable<
+  Awaited<ReturnType<typeof eliminarVenta>>
+>;
+
+export type EliminarVentaMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a single sale by id
+ */
+export const useEliminarVenta = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof eliminarVenta>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof eliminarVenta>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getEliminarVentaMutationOptions(options));
+};
 
 /**
  * @summary List all purchases

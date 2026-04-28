@@ -320,6 +320,86 @@ export const RegistrarVentaBody = zod.object({
 });
 
 /**
+ * @summary Get all sales for a specific day (YYYY-MM-DD)
+ */
+export const ListarVentasPorDiaParams = zod.object({
+  fecha: zod.coerce.string(),
+});
+
+export const ListarVentasPorDiaResponse = zod.object({
+  fecha: zod.string(),
+  totalVentas: zod.number(),
+  totalGanancia: zod.number(),
+  cantidadVentas: zod.number(),
+  ventas: zod.array(
+    zod.object({
+      id: zod.number(),
+      vendedor: zod.string(),
+      fecha: zod.string(),
+      total: zod.number(),
+      ganancia: zod.number(),
+      items: zod.array(
+        zod.object({
+          id: zod.number(),
+          ventaId: zod.number(),
+          productoCodigo: zod.string(),
+          productoNombre: zod.string(),
+          cantidad: zod.number(),
+          precioUnitario: zod.number(),
+          precioCosto: zod.number(),
+          subtotal: zod.number(),
+        }),
+      ),
+    }),
+  ),
+});
+
+/**
+ * @summary Delete all sales for a specific day
+ */
+export const EliminarVentasDiaParams = zod.object({
+  fecha: zod.coerce.string(),
+});
+
+export const EliminarVentasDiaResponse = zod.object({
+  mensaje: zod.string(),
+});
+
+/**
+ * @summary List all days that have sales, with daily totals
+ */
+export const ListarDiasConVentasResponseItem = zod.object({
+  fecha: zod.string(),
+  totalVentas: zod.number(),
+  totalGanancia: zod.number(),
+  cantidadVentas: zod.number(),
+  ventas: zod.array(
+    zod.object({
+      id: zod.number(),
+      vendedor: zod.string(),
+      fecha: zod.string(),
+      total: zod.number(),
+      ganancia: zod.number(),
+      items: zod.array(
+        zod.object({
+          id: zod.number(),
+          ventaId: zod.number(),
+          productoCodigo: zod.string(),
+          productoNombre: zod.string(),
+          cantidad: zod.number(),
+          precioUnitario: zod.number(),
+          precioCosto: zod.number(),
+          subtotal: zod.number(),
+        }),
+      ),
+    }),
+  ),
+});
+export const ListarDiasConVentasResponse = zod.array(
+  ListarDiasConVentasResponseItem,
+);
+
+/**
  * @summary Get sale by id
  */
 export const ObtenerVentaParams = zod.object({
@@ -344,6 +424,17 @@ export const ObtenerVentaResponse = zod.object({
       subtotal: zod.number(),
     }),
   ),
+});
+
+/**
+ * @summary Delete a single sale by id
+ */
+export const EliminarVentaParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const EliminarVentaResponse = zod.object({
+  mensaje: zod.string(),
 });
 
 /**
