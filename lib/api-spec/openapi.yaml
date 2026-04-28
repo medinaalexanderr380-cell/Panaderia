@@ -1,22 +1,29 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: API specification for Sistema de Panificación
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: productos
+    description: Product catalog
+  - name: ventas
+    description: Sales operations
+  - name: compras
+    description: Purchase operations
+  - name: reportes
+    description: Reports and analytics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +31,304 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /productos:
+    get:
+      operationId: listarProductos
+      tags: [productos]
+      summary: List all products
+      responses:
+        "200":
+          description: List of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Producto"
+    post:
+      operationId: crearProducto
+      tags: [productos]
+      summary: Create a product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrearProductoBody"
+      responses:
+        "201":
+          description: Created product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Producto"
+
+  /productos/{codigo}:
+    get:
+      operationId: obtenerProducto
+      tags: [productos]
+      summary: Get product by code
+      parameters:
+        - name: codigo
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Product found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Producto"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: actualizarProducto
+      tags: [productos]
+      summary: Update a product
+      parameters:
+        - name: codigo
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActualizarProductoBody"
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Producto"
+    delete:
+      operationId: eliminarProducto
+      tags: [productos]
+      summary: Delete a product
+      parameters:
+        - name: codigo
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MensajeResponse"
+
+  /ventas:
+    get:
+      operationId: listarVentas
+      tags: [ventas]
+      summary: List all sales
+      parameters:
+        - name: fechaDesde
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: fechaHasta
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: vendedor
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of sales
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Venta"
+    post:
+      operationId: registrarVenta
+      tags: [ventas]
+      summary: Register a sale
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegistrarVentaBody"
+      responses:
+        "201":
+          description: Sale registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Venta"
+
+  /ventas/{id}:
+    get:
+      operationId: obtenerVenta
+      tags: [ventas]
+      summary: Get sale by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Sale found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Venta"
+
+  /compras:
+    get:
+      operationId: listarCompras
+      tags: [compras]
+      summary: List all purchases
+      parameters:
+        - name: fechaDesde
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: fechaHasta
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of purchases
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Compra"
+    post:
+      operationId: registrarCompra
+      tags: [compras]
+      summary: Register a purchase (stock replenishment)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegistrarCompraBody"
+      responses:
+        "201":
+          description: Purchase registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Compra"
+
+  /reportes/resumen:
+    get:
+      operationId: obtenerResumen
+      tags: [reportes]
+      summary: Get financial summary (investment, revenue, profit)
+      parameters:
+        - name: fechaDesde
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: fechaHasta
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResumenFinanciero"
+
+  /reportes/top-productos:
+    get:
+      operationId: obtenerTopProductos
+      tags: [reportes]
+      summary: Get top selling products
+      responses:
+        "200":
+          description: Top products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TopProducto"
+
+  /reportes/ventas-por-dia:
+    get:
+      operationId: obtenerVentasPorDia
+      tags: [reportes]
+      summary: Get sales grouped by day
+      parameters:
+        - name: dias
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Sales by day
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VentaPorDia"
+
+  /reportes/vendedores:
+    get:
+      operationId: obtenerReporteVendedores
+      tags: [reportes]
+      summary: Get sales performance by seller
+      responses:
+        "200":
+          description: Sellers report
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReporteVendedor"
+
+  /reportes/stock-bajo:
+    get:
+      operationId: obtenerStockBajo
+      tags: [reportes]
+      summary: Get products with low stock
+      responses:
+        "200":
+          description: Low stock products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Producto"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +336,264 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    MensajeResponse:
+      type: object
+      properties:
+        mensaje:
+          type: string
+      required: [mensaje]
+
+    Producto:
+      type: object
+      properties:
+        id:
+          type: integer
+        codigo:
+          type: string
+        nombre:
+          type: string
+        descripcion:
+          type: string
+        precioVenta:
+          type: number
+        precioCosto:
+          type: number
+        stock:
+          type: integer
+        stockMinimo:
+          type: integer
+        unidad:
+          type: string
+        creadoEn:
+          type: string
+        actualizadoEn:
+          type: string
+      required: [id, codigo, nombre, descripcion, precioVenta, precioCosto, stock, stockMinimo, unidad, creadoEn, actualizadoEn]
+
+    CrearProductoBody:
+      type: object
+      properties:
+        codigo:
+          type: string
+        nombre:
+          type: string
+        descripcion:
+          type: string
+        precioVenta:
+          type: number
+        precioCosto:
+          type: number
+        stock:
+          type: integer
+        stockMinimo:
+          type: integer
+        unidad:
+          type: string
+      required: [codigo, nombre, descripcion, precioVenta, precioCosto, stock, stockMinimo, unidad]
+
+    ActualizarProductoBody:
+      type: object
+      properties:
+        nombre:
+          type: string
+        descripcion:
+          type: string
+        precioVenta:
+          type: number
+        precioCosto:
+          type: number
+        stock:
+          type: integer
+        stockMinimo:
+          type: integer
+        unidad:
+          type: string
+
+    Venta:
+      type: object
+      properties:
+        id:
+          type: integer
+        vendedor:
+          type: string
+        fecha:
+          type: string
+        total:
+          type: number
+        ganancia:
+          type: number
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ItemVenta"
+      required: [id, vendedor, fecha, total, ganancia, items]
+
+    ItemVenta:
+      type: object
+      properties:
+        id:
+          type: integer
+        ventaId:
+          type: integer
+        productoCodigo:
+          type: string
+        productoNombre:
+          type: string
+        cantidad:
+          type: integer
+        precioUnitario:
+          type: number
+        precioCosto:
+          type: number
+        subtotal:
+          type: number
+      required: [id, ventaId, productoCodigo, productoNombre, cantidad, precioUnitario, precioCosto, subtotal]
+
+    RegistrarVentaBody:
+      type: object
+      properties:
+        vendedor:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ItemVentaInput"
+      required: [vendedor, items]
+
+    ItemVentaInput:
+      type: object
+      properties:
+        productoCodigo:
+          type: string
+        cantidad:
+          type: integer
+      required: [productoCodigo, cantidad]
+
+    Compra:
+      type: object
+      properties:
+        id:
+          type: integer
+        proveedor:
+          type: string
+        fecha:
+          type: string
+        totalInvertido:
+          type: number
+        notas:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ItemCompra"
+      required: [id, proveedor, fecha, totalInvertido, items]
+
+    ItemCompra:
+      type: object
+      properties:
+        id:
+          type: integer
+        compraId:
+          type: integer
+        productoCodigo:
+          type: string
+        productoNombre:
+          type: string
+        cantidad:
+          type: integer
+        precioCosto:
+          type: number
+        subtotal:
+          type: number
+      required: [id, compraId, productoCodigo, productoNombre, cantidad, precioCosto, subtotal]
+
+    RegistrarCompraBody:
+      type: object
+      properties:
+        proveedor:
+          type: string
+        notas:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ItemCompraInput"
+      required: [proveedor, items]
+
+    ItemCompraInput:
+      type: object
+      properties:
+        productoCodigo:
+          type: string
+        cantidad:
+          type: integer
+        precioCosto:
+          type: number
+      required: [productoCodigo, cantidad, precioCosto]
+
+    ResumenFinanciero:
+      type: object
+      properties:
+        totalVentas:
+          type: number
+        totalInvertido:
+          type: number
+        gananciaTotal:
+          type: number
+        cantidadVentas:
+          type: integer
+        cantidadCompras:
+          type: integer
+        margenPromedio:
+          type: number
+      required: [totalVentas, totalInvertido, gananciaTotal, cantidadVentas, cantidadCompras, margenPromedio]
+
+    TopProducto:
+      type: object
+      properties:
+        codigo:
+          type: string
+        nombre:
+          type: string
+        cantidadVendida:
+          type: integer
+        ingresos:
+          type: number
+        ganancia:
+          type: number
+      required: [codigo, nombre, cantidadVendida, ingresos, ganancia]
+
+    VentaPorDia:
+      type: object
+      properties:
+        fecha:
+          type: string
+        totalVentas:
+          type: number
+        cantidadVentas:
+          type: integer
+        ganancia:
+          type: number
+      required: [fecha, totalVentas, cantidadVentas, ganancia]
+
+    ReporteVendedor:
+      type: object
+      properties:
+        vendedor:
+          type: string
+        cantidadVentas:
+          type: integer
+        totalVentas:
+          type: number
+        gananciaGenerada:
+          type: number
+      required: [vendedor, cantidadVentas, totalVentas, gananciaGenerada]

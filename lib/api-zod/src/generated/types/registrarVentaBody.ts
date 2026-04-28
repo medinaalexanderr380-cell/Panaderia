@@ -5,7 +5,9 @@
  * API specification for Sistema de Panificación
  * OpenAPI spec version: 0.1.0
  */
+import type { ItemVentaInput } from "./itemVentaInput";
 
-export interface HealthStatus {
-  status: string;
+export interface RegistrarVentaBody {
+  vendedor: string;
+  items: ItemVentaInput[];
 }
