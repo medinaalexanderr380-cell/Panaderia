@@ -9,6 +9,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: proveedores
+    description: Supplier management
   - name: productos
     description: Product catalog
   - name: ventas
@@ -31,6 +33,164 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /proveedores:
+    get:
+      operationId: listarProveedores
+      tags: [proveedores]
+      summary: List all suppliers
+      responses:
+        "200":
+          description: List of suppliers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Proveedor"
+    post:
+      operationId: crearProveedor
+      tags: [proveedores]
+      summary: Create a supplier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrearProveedorBody"
+      responses:
+        "201":
+          description: Created supplier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Proveedor"
+
+  /proveedores/{id}:
+    get:
+      operationId: obtenerProveedor
+      tags: [proveedores]
+      summary: Get supplier by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Supplier found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Proveedor"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: actualizarProveedor
+      tags: [proveedores]
+      summary: Update a supplier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrearProveedorBody"
+      responses:
+        "200":
+          description: Updated supplier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Proveedor"
+    delete:
+      operationId: eliminarProveedor
+      tags: [proveedores]
+      summary: Delete a supplier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MensajeResponse"
+
+  /proveedores/{id}/productos:
+    get:
+      operationId: obtenerProductosPorProveedor
+      tags: [proveedores]
+      summary: Get all products supplied by a supplier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Products from supplier
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Producto"
+
+  /proveedores/{id}/compras:
+    get:
+      operationId: obtenerComprasPorProveedor
+      tags: [proveedores]
+      summary: Get all purchases from a supplier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Purchases from supplier
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Compra"
+
+  /proveedores/{id}/resumen:
+    get:
+      operationId: obtenerResumenProveedor
+      tags: [proveedores]
+      summary: Get financial summary per supplier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Supplier summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResumenProveedor"
 
   /productos:
     get:
@@ -331,6 +491,63 @@ paths:
 
 components:
   schemas:
+    Proveedor:
+      type: object
+      properties:
+        id:
+          type: integer
+        nombre:
+          type: string
+        contacto:
+          type: string
+        telefono:
+          type: string
+        email:
+          type: string
+        direccion:
+          type: string
+        notas:
+          type: string
+        creadoEn:
+          type: string
+        actualizadoEn:
+          type: string
+      required: [id, nombre, creadoEn, actualizadoEn]
+
+    CrearProveedorBody:
+      type: object
+      properties:
+        nombre:
+          type: string
+        contacto:
+          type: string
+        telefono:
+          type: string
+        email:
+          type: string
+        direccion:
+          type: string
+        notas:
+          type: string
+      required: [nombre]
+
+    ResumenProveedor:
+      type: object
+      properties:
+        proveedorId:
+          type: integer
+        proveedorNombre:
+          type: string
+        totalCompras:
+          type: integer
+        totalInvertido:
+          type: number
+        totalProductos:
+          type: integer
+        ultimaCompra:
+          type: string
+      required: [proveedorId, proveedorNombre, totalCompras, totalInvertido, totalProductos]
+
     HealthStatus:
       type: object
       properties:
@@ -373,6 +590,10 @@ components:
           type: integer
         unidad:
           type: string
+        proveedorId:
+          type: integer
+        proveedorNombre:
+          type: string
         creadoEn:
           type: string
         actualizadoEn:
@@ -398,6 +619,8 @@ components:
           type: integer
         unidad:
           type: string
+        proveedorId:
+          type: integer
       required: [codigo, nombre, descripcion, precioVenta, precioCosto, stock, stockMinimo, unidad]
 
     ActualizarProductoBody:
@@ -417,6 +640,8 @@ components:
           type: integer
         unidad:
           type: string
+        proveedorId:
+          type: integer
 
     Venta:
       type: object

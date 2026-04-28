@@ -15,6 +15,165 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
+ * @summary List all suppliers
+ */
+export const ListarProveedoresResponseItem = zod.object({
+  id: zod.number(),
+  nombre: zod.string(),
+  contacto: zod.string().optional(),
+  telefono: zod.string().optional(),
+  email: zod.string().optional(),
+  direccion: zod.string().optional(),
+  notas: zod.string().optional(),
+  creadoEn: zod.string(),
+  actualizadoEn: zod.string(),
+});
+export const ListarProveedoresResponse = zod.array(
+  ListarProveedoresResponseItem,
+);
+
+/**
+ * @summary Create a supplier
+ */
+export const CrearProveedorBody = zod.object({
+  nombre: zod.string(),
+  contacto: zod.string().optional(),
+  telefono: zod.string().optional(),
+  email: zod.string().optional(),
+  direccion: zod.string().optional(),
+  notas: zod.string().optional(),
+});
+
+/**
+ * @summary Get supplier by id
+ */
+export const ObtenerProveedorParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ObtenerProveedorResponse = zod.object({
+  id: zod.number(),
+  nombre: zod.string(),
+  contacto: zod.string().optional(),
+  telefono: zod.string().optional(),
+  email: zod.string().optional(),
+  direccion: zod.string().optional(),
+  notas: zod.string().optional(),
+  creadoEn: zod.string(),
+  actualizadoEn: zod.string(),
+});
+
+/**
+ * @summary Update a supplier
+ */
+export const ActualizarProveedorParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ActualizarProveedorBody = zod.object({
+  nombre: zod.string(),
+  contacto: zod.string().optional(),
+  telefono: zod.string().optional(),
+  email: zod.string().optional(),
+  direccion: zod.string().optional(),
+  notas: zod.string().optional(),
+});
+
+export const ActualizarProveedorResponse = zod.object({
+  id: zod.number(),
+  nombre: zod.string(),
+  contacto: zod.string().optional(),
+  telefono: zod.string().optional(),
+  email: zod.string().optional(),
+  direccion: zod.string().optional(),
+  notas: zod.string().optional(),
+  creadoEn: zod.string(),
+  actualizadoEn: zod.string(),
+});
+
+/**
+ * @summary Delete a supplier
+ */
+export const EliminarProveedorParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const EliminarProveedorResponse = zod.object({
+  mensaje: zod.string(),
+});
+
+/**
+ * @summary Get all products supplied by a supplier
+ */
+export const ObtenerProductosPorProveedorParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ObtenerProductosPorProveedorResponseItem = zod.object({
+  id: zod.number(),
+  codigo: zod.string(),
+  nombre: zod.string(),
+  descripcion: zod.string(),
+  precioVenta: zod.number(),
+  precioCosto: zod.number(),
+  stock: zod.number(),
+  stockMinimo: zod.number(),
+  unidad: zod.string(),
+  proveedorId: zod.number().optional(),
+  proveedorNombre: zod.string().optional(),
+  creadoEn: zod.string(),
+  actualizadoEn: zod.string(),
+});
+export const ObtenerProductosPorProveedorResponse = zod.array(
+  ObtenerProductosPorProveedorResponseItem,
+);
+
+/**
+ * @summary Get all purchases from a supplier
+ */
+export const ObtenerComprasPorProveedorParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ObtenerComprasPorProveedorResponseItem = zod.object({
+  id: zod.number(),
+  proveedor: zod.string(),
+  fecha: zod.string(),
+  totalInvertido: zod.number(),
+  notas: zod.string().optional(),
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      compraId: zod.number(),
+      productoCodigo: zod.string(),
+      productoNombre: zod.string(),
+      cantidad: zod.number(),
+      precioCosto: zod.number(),
+      subtotal: zod.number(),
+    }),
+  ),
+});
+export const ObtenerComprasPorProveedorResponse = zod.array(
+  ObtenerComprasPorProveedorResponseItem,
+);
+
+/**
+ * @summary Get financial summary per supplier
+ */
+export const ObtenerResumenProveedorParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ObtenerResumenProveedorResponse = zod.object({
+  proveedorId: zod.number(),
+  proveedorNombre: zod.string(),
+  totalCompras: zod.number(),
+  totalInvertido: zod.number(),
+  totalProductos: zod.number(),
+  ultimaCompra: zod.string().optional(),
+});
+
+/**
  * @summary List all products
  */
 export const ListarProductosResponseItem = zod.object({
@@ -27,6 +186,8 @@ export const ListarProductosResponseItem = zod.object({
   stock: zod.number(),
   stockMinimo: zod.number(),
   unidad: zod.string(),
+  proveedorId: zod.number().optional(),
+  proveedorNombre: zod.string().optional(),
   creadoEn: zod.string(),
   actualizadoEn: zod.string(),
 });
@@ -44,6 +205,7 @@ export const CrearProductoBody = zod.object({
   stock: zod.number(),
   stockMinimo: zod.number(),
   unidad: zod.string(),
+  proveedorId: zod.number().optional(),
 });
 
 /**
@@ -63,6 +225,8 @@ export const ObtenerProductoResponse = zod.object({
   stock: zod.number(),
   stockMinimo: zod.number(),
   unidad: zod.string(),
+  proveedorId: zod.number().optional(),
+  proveedorNombre: zod.string().optional(),
   creadoEn: zod.string(),
   actualizadoEn: zod.string(),
 });
@@ -82,6 +246,7 @@ export const ActualizarProductoBody = zod.object({
   stock: zod.number().optional(),
   stockMinimo: zod.number().optional(),
   unidad: zod.string().optional(),
+  proveedorId: zod.number().optional(),
 });
 
 export const ActualizarProductoResponse = zod.object({
@@ -94,6 +259,8 @@ export const ActualizarProductoResponse = zod.object({
   stock: zod.number(),
   stockMinimo: zod.number(),
   unidad: zod.string(),
+  proveedorId: zod.number().optional(),
+  proveedorNombre: zod.string().optional(),
   creadoEn: zod.string(),
   actualizadoEn: zod.string(),
 });
@@ -296,6 +463,8 @@ export const ObtenerStockBajoResponseItem = zod.object({
   stock: zod.number(),
   stockMinimo: zod.number(),
   unidad: zod.string(),
+  proveedorId: zod.number().optional(),
+  proveedorNombre: zod.string().optional(),
   creadoEn: zod.string(),
   actualizadoEn: zod.string(),
 });

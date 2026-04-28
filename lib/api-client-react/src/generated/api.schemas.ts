@@ -5,6 +5,36 @@
  * API specification for Sistema de Panificación
  * OpenAPI spec version: 0.1.0
  */
+export interface Proveedor {
+  id: number;
+  nombre: string;
+  contacto?: string;
+  telefono?: string;
+  email?: string;
+  direccion?: string;
+  notas?: string;
+  creadoEn: string;
+  actualizadoEn: string;
+}
+
+export interface CrearProveedorBody {
+  nombre: string;
+  contacto?: string;
+  telefono?: string;
+  email?: string;
+  direccion?: string;
+  notas?: string;
+}
+
+export interface ResumenProveedor {
+  proveedorId: number;
+  proveedorNombre: string;
+  totalCompras: number;
+  totalInvertido: number;
+  totalProductos: number;
+  ultimaCompra?: string;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -27,6 +57,8 @@ export interface Producto {
   stock: number;
   stockMinimo: number;
   unidad: string;
+  proveedorId?: number;
+  proveedorNombre?: string;
   creadoEn: string;
   actualizadoEn: string;
 }
@@ -40,6 +72,7 @@ export interface CrearProductoBody {
   stock: number;
   stockMinimo: number;
   unidad: string;
+  proveedorId?: number;
 }
 
 export interface ActualizarProductoBody {
@@ -50,6 +83,7 @@ export interface ActualizarProductoBody {
   stock?: number;
   stockMinimo?: number;
   unidad?: string;
+  proveedorId?: number;
 }
 
 export interface ItemVenta {

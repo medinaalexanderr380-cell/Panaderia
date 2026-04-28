@@ -1,9 +1,11 @@
 import { pgTable, serial, text, integer, numeric, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { proveedoresTable } from "./proveedores";
 
 export const comprasTable = pgTable("compras", {
   id: serial("id").primaryKey(),
+  proveedorId: integer("proveedor_id").references(() => proveedoresTable.id),
   proveedor: text("proveedor").notNull(),
   fecha: timestamp("fecha").notNull().defaultNow(),
   totalInvertido: numeric("total_invertido", { precision: 10, scale: 2 }).notNull().default("0"),

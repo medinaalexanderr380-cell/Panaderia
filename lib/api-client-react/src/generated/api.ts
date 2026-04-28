@@ -20,6 +20,7 @@ import type {
   ActualizarProductoBody,
   Compra,
   CrearProductoBody,
+  CrearProveedorBody,
   ErrorResponse,
   HealthStatus,
   ListarComprasParams,
@@ -28,10 +29,12 @@ import type {
   ObtenerResumenParams,
   ObtenerVentasPorDiaParams,
   Producto,
+  Proveedor,
   RegistrarCompraBody,
   RegistrarVentaBody,
   ReporteVendedor,
   ResumenFinanciero,
+  ResumenProveedor,
   TopProducto,
   Venta,
   VentaPorDia,
@@ -113,6 +116,692 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List all suppliers
+ */
+export const getListarProveedoresUrl = () => {
+  return `/api/proveedores`;
+};
+
+export const listarProveedores = async (
+  options?: RequestInit,
+): Promise<Proveedor[]> => {
+  return customFetch<Proveedor[]>(getListarProveedoresUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListarProveedoresQueryKey = () => {
+  return [`/api/proveedores`] as const;
+};
+
+export const getListarProveedoresQueryOptions = <
+  TData = Awaited<ReturnType<typeof listarProveedores>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listarProveedores>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListarProveedoresQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listarProveedores>>
+  > = ({ signal }) => listarProveedores({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listarProveedores>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListarProveedoresQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listarProveedores>>
+>;
+export type ListarProveedoresQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all suppliers
+ */
+
+export function useListarProveedores<
+  TData = Awaited<ReturnType<typeof listarProveedores>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listarProveedores>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListarProveedoresQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a supplier
+ */
+export const getCrearProveedorUrl = () => {
+  return `/api/proveedores`;
+};
+
+export const crearProveedor = async (
+  crearProveedorBody: CrearProveedorBody,
+  options?: RequestInit,
+): Promise<Proveedor> => {
+  return customFetch<Proveedor>(getCrearProveedorUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(crearProveedorBody),
+  });
+};
+
+export const getCrearProveedorMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof crearProveedor>>,
+    TError,
+    { data: BodyType<CrearProveedorBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof crearProveedor>>,
+  TError,
+  { data: BodyType<CrearProveedorBody> },
+  TContext
+> => {
+  const mutationKey = ["crearProveedor"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof crearProveedor>>,
+    { data: BodyType<CrearProveedorBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return crearProveedor(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CrearProveedorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof crearProveedor>>
+>;
+export type CrearProveedorMutationBody = BodyType<CrearProveedorBody>;
+export type CrearProveedorMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a supplier
+ */
+export const useCrearProveedor = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof crearProveedor>>,
+    TError,
+    { data: BodyType<CrearProveedorBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof crearProveedor>>,
+  TError,
+  { data: BodyType<CrearProveedorBody> },
+  TContext
+> => {
+  return useMutation(getCrearProveedorMutationOptions(options));
+};
+
+/**
+ * @summary Get supplier by id
+ */
+export const getObtenerProveedorUrl = (id: number) => {
+  return `/api/proveedores/${id}`;
+};
+
+export const obtenerProveedor = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Proveedor> => {
+  return customFetch<Proveedor>(getObtenerProveedorUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getObtenerProveedorQueryKey = (id: number) => {
+  return [`/api/proveedores/${id}`] as const;
+};
+
+export const getObtenerProveedorQueryOptions = <
+  TData = Awaited<ReturnType<typeof obtenerProveedor>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof obtenerProveedor>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getObtenerProveedorQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof obtenerProveedor>>
+  > = ({ signal }) => obtenerProveedor(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof obtenerProveedor>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ObtenerProveedorQueryResult = NonNullable<
+  Awaited<ReturnType<typeof obtenerProveedor>>
+>;
+export type ObtenerProveedorQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get supplier by id
+ */
+
+export function useObtenerProveedor<
+  TData = Awaited<ReturnType<typeof obtenerProveedor>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof obtenerProveedor>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getObtenerProveedorQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a supplier
+ */
+export const getActualizarProveedorUrl = (id: number) => {
+  return `/api/proveedores/${id}`;
+};
+
+export const actualizarProveedor = async (
+  id: number,
+  crearProveedorBody: CrearProveedorBody,
+  options?: RequestInit,
+): Promise<Proveedor> => {
+  return customFetch<Proveedor>(getActualizarProveedorUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(crearProveedorBody),
+  });
+};
+
+export const getActualizarProveedorMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof actualizarProveedor>>,
+    TError,
+    { id: number; data: BodyType<CrearProveedorBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof actualizarProveedor>>,
+  TError,
+  { id: number; data: BodyType<CrearProveedorBody> },
+  TContext
+> => {
+  const mutationKey = ["actualizarProveedor"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof actualizarProveedor>>,
+    { id: number; data: BodyType<CrearProveedorBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return actualizarProveedor(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ActualizarProveedorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof actualizarProveedor>>
+>;
+export type ActualizarProveedorMutationBody = BodyType<CrearProveedorBody>;
+export type ActualizarProveedorMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a supplier
+ */
+export const useActualizarProveedor = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof actualizarProveedor>>,
+    TError,
+    { id: number; data: BodyType<CrearProveedorBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof actualizarProveedor>>,
+  TError,
+  { id: number; data: BodyType<CrearProveedorBody> },
+  TContext
+> => {
+  return useMutation(getActualizarProveedorMutationOptions(options));
+};
+
+/**
+ * @summary Delete a supplier
+ */
+export const getEliminarProveedorUrl = (id: number) => {
+  return `/api/proveedores/${id}`;
+};
+
+export const eliminarProveedor = async (
+  id: number,
+  options?: RequestInit,
+): Promise<MensajeResponse> => {
+  return customFetch<MensajeResponse>(getEliminarProveedorUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getEliminarProveedorMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof eliminarProveedor>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof eliminarProveedor>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["eliminarProveedor"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof eliminarProveedor>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return eliminarProveedor(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EliminarProveedorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof eliminarProveedor>>
+>;
+
+export type EliminarProveedorMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a supplier
+ */
+export const useEliminarProveedor = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof eliminarProveedor>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof eliminarProveedor>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getEliminarProveedorMutationOptions(options));
+};
+
+/**
+ * @summary Get all products supplied by a supplier
+ */
+export const getObtenerProductosPorProveedorUrl = (id: number) => {
+  return `/api/proveedores/${id}/productos`;
+};
+
+export const obtenerProductosPorProveedor = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Producto[]> => {
+  return customFetch<Producto[]>(getObtenerProductosPorProveedorUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getObtenerProductosPorProveedorQueryKey = (id: number) => {
+  return [`/api/proveedores/${id}/productos`] as const;
+};
+
+export const getObtenerProductosPorProveedorQueryOptions = <
+  TData = Awaited<ReturnType<typeof obtenerProductosPorProveedor>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof obtenerProductosPorProveedor>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getObtenerProductosPorProveedorQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof obtenerProductosPorProveedor>>
+  > = ({ signal }) =>
+    obtenerProductosPorProveedor(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof obtenerProductosPorProveedor>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ObtenerProductosPorProveedorQueryResult = NonNullable<
+  Awaited<ReturnType<typeof obtenerProductosPorProveedor>>
+>;
+export type ObtenerProductosPorProveedorQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get all products supplied by a supplier
+ */
+
+export function useObtenerProductosPorProveedor<
+  TData = Awaited<ReturnType<typeof obtenerProductosPorProveedor>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof obtenerProductosPorProveedor>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getObtenerProductosPorProveedorQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get all purchases from a supplier
+ */
+export const getObtenerComprasPorProveedorUrl = (id: number) => {
+  return `/api/proveedores/${id}/compras`;
+};
+
+export const obtenerComprasPorProveedor = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Compra[]> => {
+  return customFetch<Compra[]>(getObtenerComprasPorProveedorUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getObtenerComprasPorProveedorQueryKey = (id: number) => {
+  return [`/api/proveedores/${id}/compras`] as const;
+};
+
+export const getObtenerComprasPorProveedorQueryOptions = <
+  TData = Awaited<ReturnType<typeof obtenerComprasPorProveedor>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof obtenerComprasPorProveedor>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getObtenerComprasPorProveedorQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof obtenerComprasPorProveedor>>
+  > = ({ signal }) =>
+    obtenerComprasPorProveedor(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof obtenerComprasPorProveedor>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ObtenerComprasPorProveedorQueryResult = NonNullable<
+  Awaited<ReturnType<typeof obtenerComprasPorProveedor>>
+>;
+export type ObtenerComprasPorProveedorQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get all purchases from a supplier
+ */
+
+export function useObtenerComprasPorProveedor<
+  TData = Awaited<ReturnType<typeof obtenerComprasPorProveedor>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof obtenerComprasPorProveedor>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getObtenerComprasPorProveedorQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get financial summary per supplier
+ */
+export const getObtenerResumenProveedorUrl = (id: number) => {
+  return `/api/proveedores/${id}/resumen`;
+};
+
+export const obtenerResumenProveedor = async (
+  id: number,
+  options?: RequestInit,
+): Promise<ResumenProveedor> => {
+  return customFetch<ResumenProveedor>(getObtenerResumenProveedorUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getObtenerResumenProveedorQueryKey = (id: number) => {
+  return [`/api/proveedores/${id}/resumen`] as const;
+};
+
+export const getObtenerResumenProveedorQueryOptions = <
+  TData = Awaited<ReturnType<typeof obtenerResumenProveedor>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof obtenerResumenProveedor>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getObtenerResumenProveedorQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof obtenerResumenProveedor>>
+  > = ({ signal }) =>
+    obtenerResumenProveedor(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof obtenerResumenProveedor>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ObtenerResumenProveedorQueryResult = NonNullable<
+  Awaited<ReturnType<typeof obtenerResumenProveedor>>
+>;
+export type ObtenerResumenProveedorQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get financial summary per supplier
+ */
+
+export function useObtenerResumenProveedor<
+  TData = Awaited<ReturnType<typeof obtenerResumenProveedor>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof obtenerResumenProveedor>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getObtenerResumenProveedorQueryOptions(id, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
