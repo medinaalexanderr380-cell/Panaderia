@@ -17,7 +17,7 @@ export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
 
   const navigation = [
-    { name: "Dashboard", href: "/", icon: Store },
+    { name: "Inicio", href: "/", icon: Store },
     { name: "Ventas", href: "/ventas", icon: ShoppingCart },
     { name: "Productos", href: "/productos", icon: Package },
     { name: "Compras", href: "/compras", icon: Truck },
@@ -26,49 +26,93 @@ export function Layout({ children }: LayoutProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-background flex flex-col md:flex-row font-sans">
-      {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-sidebar border-r border-sidebar-border flex-shrink-0">
-        <div className="p-6">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-              <Store className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="text-xl font-bold tracking-tight text-sidebar-foreground">
-              Panadería Pro
-            </span>
-          </Link>
-        </div>
-        <nav className="px-4 pb-6 space-y-1">
-          {navigation.map((item) => {
-            const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-sm font-medium",
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                )}
-              >
-                <item.icon className={cn("w-5 h-5", isActive ? "text-primary" : "text-sidebar-foreground/60")} />
-                {item.name}
-              </Link>
-            );
-          })}
-        </nav>
-      </aside>
+    <div className="min-h-screen bg-background font-sans">
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-auto p-4 md:p-8">
+      {/* ── DESKTOP: sidebar lateral ── */}
+      <div className="hidden md:flex min-h-screen">
+        <aside className="w-64 bg-sidebar border-r border-sidebar-border flex-shrink-0 flex flex-col">
+          <div className="p-6">
+            <Link href="/" className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                <Store className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <span className="text-xl font-bold tracking-tight text-sidebar-foreground">
+                Panadería Pro
+              </span>
+            </Link>
+          </div>
+          <nav className="px-4 pb-6 space-y-1 flex-1">
+            {navigation.map((item) => {
+              const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-sm font-medium",
+                    isActive
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  )}
+                >
+                  <item.icon className={cn("w-5 h-5", isActive ? "text-primary" : "text-sidebar-foreground/60")} />
+                  {item.name}
+                </Link>
+              );
+            })}
+          </nav>
+        </aside>
+
+        <main className="flex-1 overflow-auto p-8">
           <div className="max-w-6xl mx-auto">
             {children}
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
+
+      {/* ── MOBILE: header + contenido + barra inferior ── */}
+      <div className="flex flex-col md:hidden min-h-screen">
+
+        {/* Header mobile */}
+        <header className="bg-sidebar border-b border-sidebar-border px-4 py-3 flex items-center gap-2 sticky top-0 z-40">
+          <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center">
+            <Store className="w-4 h-4 text-primary-foreground" />
+          </div>
+          <span className="text-lg font-bold tracking-tight text-sidebar-foreground">
+            Panadería Pro
+          </span>
+        </header>
+
+        {/* Contenido */}
+        <main className="flex-1 overflow-auto p-4 pb-24">
+          {children}
+        </main>
+
+        {/* Barra de navegación inferior (mobile) */}
+        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-sidebar border-t border-sidebar-border">
+          <div className="grid grid-cols-6 h-16">
+            {navigation.map((item) => {
+              const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-0.5 transition-colors text-[10px] font-medium",
+                    isActive
+                      ? "text-primary"
+                      : "text-sidebar-foreground/60 active:text-primary"
+                  )}
+                >
+                  <item.icon className={cn("w-5 h-5", isActive ? "text-primary" : "text-sidebar-foreground/50")} />
+                  <span>{item.name}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      </div>
+
     </div>
   );
 }

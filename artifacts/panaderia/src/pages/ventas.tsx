@@ -38,7 +38,7 @@ import { es } from "date-fns/locale";
 
 /* ─── helpers ─────────────────────────────────────────────────────────────── */
 const fmt = (n: number) =>
-  new Intl.NumberFormat("es", { style: "currency", currency: "MXN" }).format(n);
+  new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
 
 interface CartItem {
   productoCodigo: string;
@@ -230,7 +230,7 @@ function POS() {
           )}
 
           {/* Cart table */}
-          <div className="rounded-md border overflow-hidden">
+          <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
@@ -266,7 +266,7 @@ function POS() {
                       <TableCell>
                         <Button
                           variant="ghost" size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
                           onClick={() => removeItem(item.productoCodigo)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -382,16 +382,16 @@ function DiaGroup({ dia }: { dia: { fecha: string; totalVentas: number; totalGan
                 </div>
               </div>
 
-              <div className="flex items-center gap-6">
-                <div className="text-right hidden sm:block">
-                  <p className="text-xs text-muted-foreground">Total del día</p>
+              <div className="flex items-center gap-3 sm:gap-6">
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Total</p>
                   <p className="font-bold text-foreground">{fmt(dia.totalVentas)}</p>
                 </div>
-                <div className="text-right hidden md:block">
+                <div className="text-right hidden sm:block">
                   <p className="text-xs text-muted-foreground">Ganancia</p>
                   <p className="font-bold text-primary">{fmt(dia.totalGanancia)}</p>
                 </div>
-                <div className="text-right hidden lg:block">
+                <div className="text-right hidden md:block">
                   <p className="text-xs text-muted-foreground">Margen</p>
                   <div className="flex items-center gap-1">
                     <TrendingUp className="w-3 h-3 text-primary" />
@@ -420,7 +420,7 @@ function DiaGroup({ dia }: { dia: { fecha: string; totalVentas: number; totalGan
 
           {/* Sales list */}
           <CollapsibleContent>
-            <div className="border-t">
+            <div className="border-t overflow-x-auto">
               <Table>
                 <TableHeader className="bg-muted/40">
                   <TableRow>
@@ -457,7 +457,7 @@ function DiaGroup({ dia }: { dia: { fecha: string; totalVentas: number; totalGan
                       <TableCell>
                         <Button
                           variant="ghost" size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
                           onClick={() => setConfirmDelete({ type: "venta", id: venta.id, label: `venta #${String(venta.id).padStart(4, "0")}` })}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
