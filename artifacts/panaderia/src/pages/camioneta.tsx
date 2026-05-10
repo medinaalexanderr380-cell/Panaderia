@@ -10,8 +10,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Truck, Plus, Trash2, ShoppingCart, Package, AlertTriangle, User, Search, ArrowDownToLine } from "lucide-react";
-import { formatCurrency } from "@/lib/format";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import { Truck, Plus, Trash2, ShoppingCart, AlertTriangle, User, Search, ArrowDownToLine, Lock, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/auth";
 
@@ -58,14 +60,67 @@ function useCaducadoMutation(onSuccess: () => void) {
   });
 }
 
-// ─── Pestaña: Stock en Camioneta ────────────────────────────────────────────
+// ─── Diálogo de verificación de credenciales ─────────────────────────────────
+interface CredDialogProps {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onConfirm: (username: string, password: string) => void;
+  isPending: boolean;
+  error?: string;
+}
+
+function CredDialog({ open, onOpenChange, onConfirm, isPending, error }: CredDialogProps) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+
+  const handleClose = (v: boolean) => {
+    if (!v) { setUsername(""); setPassword(""); }
+    onOpenChange(v);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Lock className="w-5 h-5 text-primary" /> Confirmar identidad
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">Para autorizar la carga de la camioneta ingresá tu usuario y contraseña.</p>
+        <div className="space-y-3 py-2">
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Usuario</label>
+            <div className="relative">
+              <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input className="pl-9" placeholder="Tu usuario" value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Contraseña</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input className="pl-9" type="password" placeholder="Tu contraseña" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" onKeyDown={e => e.key === "Enter" && username && password && onConfirm(username, password)} />
+            </div>
+          </div>
+          {error && <p className="text-destructive text-sm bg-destructive/10 p-2 rounded">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
+          <Button onClick={() => onConfirm(username, password)} disabled={isPending || !username || !password}>
+            {isPending ? "Verificando..." : "Autorizar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Pestaña: Stock en Camioneta ──────────────────────────────────────────────
 function TabStock({ stock, isLoading, onCaducado }: { stock: StockItem[] | undefined; isLoading: boolean; onCaducado: (item: StockItem) => void }) {
   return (
     <Card>
       <CardHeader className="bg-muted/30 border-b pb-4">
-        <CardTitle className="flex items-center gap-2">
-          <Truck className="w-5 h-5 text-primary" /> Inventario en Camioneta
-        </CardTitle>
+        <CardTitle className="flex items-center gap-2"><Truck className="w-5 h-5 text-primary" /> Inventario en Camioneta</CardTitle>
       </CardHeader>
       <div className="overflow-x-auto">
         <Table>
@@ -121,12 +176,15 @@ function TabStock({ stock, isLoading, onCaducado }: { stock: StockItem[] | undef
   );
 }
 
-// ─── Pestaña: Cargar Camioneta ───────────────────────────────────────────────
+// ─── Pestaña: Cargar Camioneta ────────────────────────────────────────────────
 function TabCargar() {
   const { toast } = useToast();
   const { data: productos } = useListarProductos();
   const [search, setSearch] = useState("");
   const [cargaItems, setCargaItems] = useState<CargaItem[]>([]);
+  const [credOpen, setCredOpen] = useState(false);
+  const [credError, setCredError] = useState("");
+  const [verifying, setVerifying] = useState(false);
 
   const cargaMutation = useCargaMutation(() => {
     toast({ title: "¡Camioneta cargada exitosamente!" });
@@ -134,7 +192,10 @@ function TabCargar() {
   });
 
   const productosFiltrados = (productos ?? []).filter(p =>
-    p.stock > 0 && (p.nombre.toLowerCase().includes(search.toLowerCase()) || p.codigo.toLowerCase().includes(search.toLowerCase()))
+    p.stock > 0 && (
+      p.nombre.toLowerCase().includes(search.toLowerCase()) ||
+      p.codigo.toLowerCase().includes(search.toLowerCase())
+    )
   );
 
   const addToCarga = (p: any) => {
@@ -145,13 +206,27 @@ function TabCargar() {
     });
   };
 
-  const updateCantidad = (codigo: string, val: number) => {
+  const updateCantidad = (codigo: string, val: number) =>
     setCargaItems(prev => prev.map(i => i.productoCodigo === codigo ? { ...i, cantidad: Math.max(1, Math.min(val, i.stockDisponible)) } : i));
-  };
 
-  const handleCargar = () => {
-    if (cargaItems.length === 0) { toast({ title: "Agregá productos primero", variant: "destructive" }); return; }
-    cargaMutation.mutate(cargaItems.map(i => ({ productoCodigo: i.productoCodigo, cantidad: i.cantidad })));
+  const handleVerifyAndLoad = async (username: string, password: string) => {
+    setVerifying(true);
+    setCredError("");
+    try {
+      const r = await fetch("/api/auth/verify", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setCredError(d.error || "Credenciales incorrectas"); return; }
+      setCredOpen(false);
+      cargaMutation.mutate(cargaItems.map(i => ({ productoCodigo: i.productoCodigo, cantidad: i.cantidad })));
+    } catch {
+      setCredError("Error de conexión");
+    } finally {
+      setVerifying(false);
+    }
   };
 
   return (
@@ -163,7 +238,7 @@ function TabCargar() {
         <CardContent className="p-4 space-y-3">
           <div className="relative">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar producto..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+            <Input placeholder="Buscar producto por nombre o código..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <div className="max-h-80 overflow-y-auto space-y-1">
             {productosFiltrados.length === 0 ? (
@@ -174,9 +249,7 @@ function TabCargar() {
                   <p className="font-medium text-sm">{p.nombre}</p>
                   <p className="text-xs text-muted-foreground">{p.codigo} · Stock: {p.stock} {p.unidad}</p>
                 </div>
-                <Button variant="ghost" size="sm" className="text-primary">
-                  <Plus className="w-4 h-4" />
-                </Button>
+                <Button variant="ghost" size="sm" className="text-primary"><Plus className="w-4 h-4" /></Button>
               </div>
             ))}
           </div>
@@ -185,9 +258,7 @@ function TabCargar() {
 
       <Card className="h-fit">
         <CardHeader className="bg-muted/30 border-b pb-4">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Truck className="w-4 h-4 text-primary" /> A Cargar
-          </CardTitle>
+          <CardTitle className="text-base flex items-center gap-2"><Truck className="w-4 h-4 text-primary" /> A Cargar</CardTitle>
         </CardHeader>
         <CardContent className="p-4 space-y-4">
           {cargaItems.length === 0 ? (
@@ -208,36 +279,52 @@ function TabCargar() {
               </Button>
             </div>
           ))}
-          <Button className="w-full mt-4" onClick={handleCargar} disabled={cargaItems.length === 0 || cargaMutation.isPending}>
-            <Truck className="w-4 h-4 mr-2" />
+          <Button
+            className="w-full mt-4"
+            onClick={() => { if (cargaItems.length === 0) { toast({ title: "Agregá productos primero", variant: "destructive" }); return; } setCredError(""); setCredOpen(true); }}
+            disabled={cargaItems.length === 0 || cargaMutation.isPending}
+          >
+            <Lock className="w-4 h-4 mr-2" />
             {cargaMutation.isPending ? "Cargando..." : "Confirmar Carga"}
           </Button>
         </CardContent>
       </Card>
+
+      <CredDialog
+        open={credOpen}
+        onOpenChange={setCredOpen}
+        onConfirm={handleVerifyAndLoad}
+        isPending={verifying}
+        error={credError}
+      />
     </div>
   );
 }
 
-// ─── Pestaña: Venta en Ruta ─────────────────────────────────────────────────
+// ─── Pestaña: Venta en Ruta ───────────────────────────────────────────────────
 function TabVentaRuta({ stock }: { stock: StockItem[] | undefined }) {
   const { toast } = useToast();
   const { user } = useAuth();
   const [vendedor, setVendedor] = useState(user?.nombre || "");
+  const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
 
   const ventaMutation = useVentaRutaMutation(() => {
-    toast({ title: "Venta en ruta registrada" });
+    toast({ title: "Venta en ruta registrada", description: `Vendedor: ${vendedor}` });
     setCart([]);
   });
+
+  const stockFiltrado = (stock ?? []).filter(item =>
+    item.nombre.toLowerCase().includes(search.toLowerCase()) ||
+    item.codigo.toLowerCase().includes(search.toLowerCase())
+  );
 
   const addToCart = (item: StockItem) => {
     setCart(prev => {
       const ex = prev.find(i => i.productoCodigo === item.codigo);
-      const maxQty = item.stockCamioneta;
-      if (ex) {
-        if (ex.cantidad >= maxQty) { toast({ title: "Sin stock en camioneta", variant: "destructive" }); return prev; }
-        return prev.map(i => i.productoCodigo === item.codigo ? { ...i, cantidad: i.cantidad + 1 } : i);
-      }
+      const inCart = ex?.cantidad ?? 0;
+      if (inCart >= item.stockCamioneta) { toast({ title: `Sin stock en camioneta para ${item.nombre}`, variant: "destructive" }); return prev; }
+      if (ex) return prev.map(i => i.productoCodigo === item.codigo ? { ...i, cantidad: i.cantidad + 1 } : i);
       return [...prev, { productoCodigo: item.codigo, productoNombre: item.nombre, cantidad: 1, precioUnitario: item.precioVenta }];
     });
   };
@@ -248,20 +335,24 @@ function TabVentaRuta({ stock }: { stock: StockItem[] | undefined }) {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <Card className="lg:col-span-2">
         <CardHeader className="bg-primary/5 border-b pb-4">
-          <CardTitle className="text-base flex items-center gap-2">
-            <ShoppingCart className="w-4 h-4 text-primary" /> Productos en Camioneta
-          </CardTitle>
+          <CardTitle className="text-base flex items-center gap-2"><ShoppingCart className="w-4 h-4 text-primary" /> Productos en Camioneta</CardTitle>
         </CardHeader>
-        <CardContent className="p-4">
+        <CardContent className="p-4 space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar producto por nombre..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
           {!stock?.length ? (
             <p className="text-center py-8 text-muted-foreground">La camioneta está vacía. Cargá productos primero.</p>
           ) : (
-            <div className="space-y-2">
-              {stock.map(item => (
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {stockFiltrado.length === 0 ? (
+                <p className="text-center py-6 text-muted-foreground text-sm">No se encontraron productos</p>
+              ) : stockFiltrado.map(item => (
                 <div key={item.codigo} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 cursor-pointer" onClick={() => addToCart(item)}>
                   <div>
                     <p className="font-medium text-sm">{item.nombre}</p>
-                    <p className="text-xs text-muted-foreground">Stock bordo: {item.stockCamioneta} · {fmt(item.precioVenta)}</p>
+                    <p className="text-xs text-muted-foreground">Disponible: {item.stockCamioneta} · {fmt(item.precioVenta)}</p>
                   </div>
                   <Button variant="ghost" size="sm" className="text-primary"><Plus className="w-4 h-4" /></Button>
                 </div>
@@ -277,36 +368,47 @@ function TabVentaRuta({ stock }: { stock: StockItem[] | undefined }) {
         </CardHeader>
         <CardContent className="p-4 space-y-4">
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Vendedor</label>
+            <label className="text-xs text-muted-foreground mb-1.5 block font-medium">Vendedor</label>
             <div className="relative">
               <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Nombre del vendedor" className="pl-8 text-sm" value={vendedor} onChange={e => setVendedor(e.target.value)} />
             </div>
           </div>
-          <div className="space-y-2">
-            {cart.map(item => (
+
+          <div className="space-y-2 min-h-[60px]">
+            {cart.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-3">Seleccioná productos de la lista</p>
+            ) : cart.map(item => (
               <div key={item.productoCodigo} className="flex items-center gap-2">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium truncate">{item.productoNombre}</p>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => setCart(c => c.map(i => i.productoCodigo === item.productoCodigo ? { ...i, cantidad: Math.max(0, i.cantidad - 1) } : i).filter(i => i.cantidad > 0))}>−</Button>
+                  <Button variant="outline" size="icon" className="h-6 w-6"
+                    onClick={() => setCart(c => c.map(i => i.productoCodigo === item.productoCodigo ? { ...i, cantidad: Math.max(0, i.cantidad - 1) } : i).filter(i => i.cantidad > 0))}>−</Button>
                   <span className="w-6 text-center text-sm font-bold">{item.cantidad}</span>
-                  <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => setCart(c => c.map(i => i.productoCodigo === item.productoCodigo ? { ...i, cantidad: i.cantidad + 1 } : i))}>+</Button>
+                  <Button variant="outline" size="icon" className="h-6 w-6"
+                    onClick={() => addToCart(stock?.find(s => s.codigo === item.productoCodigo)!)}>+</Button>
                 </div>
                 <span className="text-xs font-medium w-20 text-right">{fmt(item.cantidad * item.precioUnitario)}</span>
               </div>
             ))}
           </div>
+
           {cart.length > 0 && (
             <div className="border-t pt-3 flex justify-between font-bold">
               <span>Total</span>
               <span className="text-primary">{fmt(total)}</span>
             </div>
           )}
-          <Button className="w-full" onClick={() => ventaMutation.mutate({ vendedor, items: cart.map(i => ({ productoCodigo: i.productoCodigo, cantidad: i.cantidad })) })}
-            disabled={cart.length === 0 || !vendedor.trim() || ventaMutation.isPending}>
-            {ventaMutation.isPending ? "Registrando..." : "Confirmar Venta en Ruta"}
+
+          <Button
+            className="w-full"
+            onClick={() => ventaMutation.mutate({ vendedor, items: cart.map(i => ({ productoCodigo: i.productoCodigo, cantidad: i.cantidad })) })}
+            disabled={cart.length === 0 || !vendedor.trim() || ventaMutation.isPending}
+          >
+            <CheckCircle className="w-4 h-4 mr-2" />
+            {ventaMutation.isPending ? "Registrando..." : "Confirmar Venta"}
           </Button>
         </CardContent>
       </Card>
@@ -314,7 +416,7 @@ function TabVentaRuta({ stock }: { stock: StockItem[] | undefined }) {
   );
 }
 
-// ─── Página Principal ────────────────────────────────────────────────────────
+// ─── Página Principal ─────────────────────────────────────────────────────────
 type Tab = "stock" | "cargar" | "venta";
 
 export default function Camioneta() {
@@ -358,6 +460,7 @@ export default function Camioneta() {
       {tab === "cargar" && <TabCargar />}
       {tab === "venta" && <TabVentaRuta stock={stock} />}
 
+      {/* Dialog: Caducado */}
       <AlertDialog open={!!caducadoDialog} onOpenChange={o => !o && setCaducadoDialog(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -369,13 +472,7 @@ export default function Camioneta() {
               <p>Stock en camioneta: <strong>{caducadoDialog?.stockCamioneta}</strong></p>
               <div>
                 <label className="text-sm font-medium mb-1 block">Cantidad a dar de baja:</label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={caducadoDialog?.stockCamioneta}
-                  value={caducadoCantidad}
-                  onChange={e => setCaducadoCantidad(Number(e.target.value))}
-                />
+                <Input type="number" min={1} max={caducadoDialog?.stockCamioneta} value={caducadoCantidad} onChange={e => setCaducadoCantidad(Number(e.target.value))} />
               </div>
               <p className="text-sm text-muted-foreground">
                 Pérdida estimada: <strong className="text-destructive">{caducadoDialog ? fmt(caducadoDialog.precioCosto * caducadoCantidad) : ""}</strong>

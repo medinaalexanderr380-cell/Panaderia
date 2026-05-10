@@ -13,6 +13,7 @@ import Compras from "@/pages/compras";
 import Proveedores from "@/pages/proveedores";
 import Reportes from "@/pages/reportes";
 import Camioneta from "@/pages/camioneta";
+import Usuarios from "@/pages/usuarios";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1 } },
@@ -41,6 +42,7 @@ function Router() {
         <Route path="/proveedores" component={Proveedores} />
         <Route path="/reportes" component={Reportes} />
         <Route path="/camioneta" component={Camioneta} />
+        <Route path="/usuarios" component={Usuarios} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

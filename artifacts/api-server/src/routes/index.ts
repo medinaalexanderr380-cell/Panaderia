@@ -8,6 +8,7 @@ import comprasRouter from "./compras";
 import reportesRouter from "./reportes";
 import camionetaRouter from "./camioneta";
 import perdidasRouter from "./perdidas";
+import usuariosRouter from "./usuarios";
 import { requireAuth } from "../middleware/auth";
 
 const router: IRouter = Router();
@@ -21,5 +22,6 @@ router.use("/compras", requireAuth, comprasRouter);
 router.use("/reportes", requireAuth, reportesRouter);
 router.use("/camioneta", camionetaRouter);
 router.use("/perdidas", perdidasRouter);
+router.use("/usuarios", usuariosRouter);
 
 export default router;

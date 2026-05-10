@@ -37,4 +37,14 @@ router.get("/me", (req, res) => {
   return res.json({ id: s.userId, username: s.username, nombre: s.nombre, rol: s.rol });
 });
 
+router.post("/verify", async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ error: "Usuario y contraseña requeridos" });
+  const [usuario] = await db.select().from(usuariosTable).where(eq(usuariosTable.username, username));
+  if (!usuario || !usuario.activo) return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
+  const ok = await bcrypt.compare(password, usuario.passwordHash);
+  if (!ok) return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
+  return res.json({ valido: true, nombre: usuario.nombre });
+});
+
 export default router;

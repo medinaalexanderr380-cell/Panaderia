@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import {
-  Store, ShoppingCart, Package, Users, BarChart, Truck, LogOut,
+  Store, ShoppingCart, Package, Users, BarChart, Truck, LogOut, ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
@@ -15,6 +15,7 @@ export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
   const { toast } = useToast();
+  const isAdmin = user?.rol === "admin";
 
   const navigation = [
     { name: "Inicio", href: "/", icon: Store },
@@ -24,6 +25,7 @@ export function Layout({ children }: LayoutProps) {
     { name: "Camioneta", href: "/camioneta", icon: Truck },
     { name: "Proveedores", href: "/proveedores", icon: Users },
     { name: "Reportes", href: "/reportes", icon: BarChart },
+    ...(isAdmin ? [{ name: "Usuarios", href: "/usuarios", icon: ShieldCheck }] : []),
   ];
 
   const mobileNav = [
@@ -31,7 +33,7 @@ export function Layout({ children }: LayoutProps) {
     { name: "Ventas", href: "/ventas", icon: ShoppingCart },
     { name: "Camioneta", href: "/camioneta", icon: Truck },
     { name: "Productos", href: "/productos", icon: Package },
-    { name: "Más", href: "/reportes", icon: BarChart },
+    { name: isAdmin ? "Usuarios" : "Reportes", href: isAdmin ? "/usuarios" : "/reportes", icon: isAdmin ? ShieldCheck : BarChart },
   ];
 
   const handleLogout = async () => {
@@ -85,7 +87,7 @@ export function Layout({ children }: LayoutProps) {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-medium text-sidebar-foreground truncate">{user?.nombre}</p>
-                <p className="text-xs text-sidebar-foreground/60 capitalize">{user?.rol}</p>
+                <p className="text-xs text-sidebar-foreground/60 capitalize">{user?.rol === "admin" ? "Administrador" : "Vendedor"}</p>
               </div>
             </div>
             <Button variant="ghost" size="sm" className="w-full justify-start text-sidebar-foreground/70 hover:text-destructive" onClick={handleLogout}>
