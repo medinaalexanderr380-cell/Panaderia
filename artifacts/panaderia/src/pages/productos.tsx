@@ -212,21 +212,10 @@ export default function Productos() {
                 />
                 <FormField
                   control={form.control}
-                  name="stock"
-                  render={({ field }) => (
-                    <FormItem className="col-span-1">
-                      <FormLabel>Stock Actual</FormLabel>
-                      <FormControl><Input type="number" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
                   name="stockMinimo"
                   render={({ field }) => (
                     <FormItem className="col-span-1">
-                      <FormLabel>Stock Mínimo</FormLabel>
+                      <FormLabel>Stock Mínimo (alerta)</FormLabel>
                       <FormControl><Input type="number" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>

@@ -8,6 +8,7 @@ export const ventasTable = pgTable("ventas", {
   fecha: timestamp("fecha").notNull().defaultNow(),
   total: numeric("total", { precision: 10, scale: 2 }).notNull().default("0"),
   ganancia: numeric("ganancia", { precision: 10, scale: 2 }).notNull().default("0"),
+  origen: text("origen").notNull().default("panaderia"),
 });
 
 export const itemsVentaTable = pgTable("items_venta", {
