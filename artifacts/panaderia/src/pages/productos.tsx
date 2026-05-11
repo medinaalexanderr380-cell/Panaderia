@@ -235,17 +235,19 @@ export default function Productos() {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="stock"
-                  render={({ field }) => (
-                    <FormItem className="col-span-1">
-                      <FormLabel>Stock inicial</FormLabel>
-                      <FormControl><Input type="number" min="0" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {!editingProducto && (
+                  <FormField
+                    control={form.control}
+                    name="stock"
+                    render={({ field }) => (
+                      <FormItem className="col-span-1">
+                        <FormLabel>Stock inicial</FormLabel>
+                        <FormControl><Input type="number" min="0" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <FormField
                   control={form.control}
                   name="stockMinimo"
