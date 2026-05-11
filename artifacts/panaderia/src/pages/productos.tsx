@@ -114,9 +114,9 @@ export default function Productos() {
     form.reset({
       nombre: producto.nombre,
       descripcion: producto.descripcion || "",
-      precioVenta: producto.precioVenta,
-      precioCosto: producto.precioCosto,
-      stock: producto.stock,
+      precioVenta: Number(producto.precioVenta),
+      precioCosto: Number(producto.precioCosto),
+      stock: Number(producto.stock),
       stockMinimo: producto.stockMinimo,
       unidad: producto.unidad,
       proveedorId: producto.proveedorId || null
@@ -202,11 +202,22 @@ export default function Productos() {
                 />
                 <FormField
                   control={form.control}
+                  name="stock"
+                  render={({ field }) => (
+                    <FormItem className="col-span-1">
+                      <FormLabel>Stock inicial</FormLabel>
+                      <FormControl><Input type="number" min="0" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
                   name="stockMinimo"
                   render={({ field }) => (
                     <FormItem className="col-span-1">
                       <FormLabel>Stock Mínimo (alerta)</FormLabel>
-                      <FormControl><Input type="number" {...field} /></FormControl>
+                      <FormControl><Input type="number" min="0" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
