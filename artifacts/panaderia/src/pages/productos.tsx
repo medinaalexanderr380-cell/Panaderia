@@ -24,8 +24,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
+const generarCodigo = (nombre: string) => {
+  const base = nombre.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 16);
+  return base || "PROD" + Date.now();
+};
+
 const productoSchema = z.object({
-  codigo: z.string().min(1, "El código es requerido"),
   nombre: z.string().min(1, "El nombre es requerido"),
   descripcion: z.string().optional().default(""),
   precioVenta: z.coerce.number().min(0, "Debe ser mayor o igual a 0"),
@@ -51,7 +55,6 @@ export default function Productos() {
   const form = useForm<ProductoFormValues>({
     resolver: zodResolver(productoSchema),
     defaultValues: {
-      codigo: "",
       nombre: "",
       descripcion: "",
       precioVenta: 0,
@@ -102,14 +105,13 @@ export default function Productos() {
     if (editingProducto) {
       actualizarMutation.mutate({ codigo: editingProducto.codigo, data: { ...data, proveedorId: data.proveedorId || undefined } });
     } else {
-      crearMutation.mutate({ data: { ...data, proveedorId: data.proveedorId || undefined } });
+      crearMutation.mutate({ data: { ...data, codigo: generarCodigo(data.nombre), proveedorId: data.proveedorId || undefined } });
     }
   };
 
   const handleEdit = (producto: any) => {
     setEditingProducto(producto);
     form.reset({
-      codigo: producto.codigo,
       nombre: producto.nombre,
       descripcion: producto.descripcion || "",
       precioVenta: producto.precioVenta,
@@ -130,9 +132,8 @@ export default function Productos() {
     }
   };
 
-  const filteredProductos = productos?.filter(p => 
-    p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.codigo.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredProductos = productos?.filter(p =>
+    p.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -157,20 +158,9 @@ export default function Productos() {
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="codigo"
-                  render={({ field }) => (
-                    <FormItem className="col-span-1">
-                      <FormLabel>Código</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
                   name="nombre"
                   render={({ field }) => (
-                    <FormItem className="col-span-1">
+                    <FormItem className="col-span-2">
                       <FormLabel>Nombre</FormLabel>
                       <FormControl><Input {...field} /></FormControl>
                       <FormMessage />
@@ -298,7 +288,6 @@ export default function Productos() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Código</TableHead>
               <TableHead>Producto</TableHead>
               <TableHead>Precio/Costo</TableHead>
               <TableHead>Stock</TableHead>
@@ -308,13 +297,12 @@ export default function Productos() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-8">Cargando...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="text-center py-8">Cargando...</TableCell></TableRow>
             ) : filteredProductos?.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No se encontraron productos.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No se encontraron productos.</TableCell></TableRow>
             ) : (
               filteredProductos?.map((producto) => (
                 <TableRow key={producto.id}>
-                  <TableCell className="font-mono text-xs">{producto.codigo}</TableCell>
                   <TableCell>
                     <div className="font-medium">{producto.nombre}</div>
                     <div className="text-xs text-muted-foreground truncate max-w-[200px]">{producto.descripcion}</div>
