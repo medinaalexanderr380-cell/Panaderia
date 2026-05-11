@@ -13,15 +13,19 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Truck, Plus, Trash2, ShoppingCart, AlertTriangle, User, Search, ArrowDownToLine, Lock, CheckCircle } from "lucide-react";
+import { Truck, Plus, Trash2, ShoppingCart, AlertTriangle, Search, ArrowDownToLine, Lock, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/context/auth";
 
 const fmt = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
 
 interface StockItem { codigo: string; nombre: string; stockCamioneta: number; precioVenta: number; precioCosto: number; unidad: string; descripcion: string }
 interface CartItem { productoCodigo: string; productoNombre: string; cantidad: number; precioUnitario: number; }
 interface CargaItem { productoCodigo: string; productoNombre: string; cantidad: number; stockDisponible: number; }
+
+const VENDEDORES = [
+  { username: "michel", nombre: "Michel" },
+  { username: "david", nombre: "David" },
+];
 
 function useCamionetaStock() {
   return useQuery<StockItem[]>({
@@ -60,21 +64,22 @@ function useCaducadoMutation(onSuccess: () => void) {
   });
 }
 
-// ─── Diálogo de verificación de credenciales ─────────────────────────────────
+// ─── Diálogo de verificación ──────────────────────────────────────────────────
 interface CredDialogProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onConfirm: (username: string, password: string) => void;
+  onConfirm: (username: string, nombre: string, password: string) => void;
   isPending: boolean;
   error?: string;
+  titulo?: string;
 }
 
-function CredDialog({ open, onOpenChange, onConfirm, isPending, error }: CredDialogProps) {
-  const [username, setUsername] = useState("");
+function CredDialog({ open, onOpenChange, onConfirm, isPending, error, titulo }: CredDialogProps) {
+  const [selected, setSelected] = useState<typeof VENDEDORES[0] | null>(null);
   const [password, setPassword] = useState("");
 
   const handleClose = (v: boolean) => {
-    if (!v) { setUsername(""); setPassword(""); }
+    if (!v) { setSelected(null); setPassword(""); }
     onOpenChange(v);
   };
 
@@ -83,36 +88,75 @@ function CredDialog({ open, onOpenChange, onConfirm, isPending, error }: CredDia
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Lock className="w-5 h-5 text-primary" /> Confirmar identidad
+            <Lock className="w-5 h-5 text-primary" /> {titulo || "Identificación"}
           </DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">Para autorizar la carga de la camioneta ingresá tu usuario y contraseña.</p>
-        <div className="space-y-3 py-2">
+        <div className="space-y-4 py-2">
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Usuario</label>
-            <div className="relative">
-              <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Tu usuario" value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" />
+            <label className="text-sm font-medium mb-2 block">¿Quién sos?</label>
+            <div className="grid grid-cols-2 gap-3">
+              {VENDEDORES.map(v => (
+                <button
+                  key={v.username}
+                  onClick={() => setSelected(v)}
+                  className={`py-4 rounded-xl border-2 font-semibold text-lg transition-all ${
+                    selected?.username === v.username
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-card hover:border-primary/40 text-foreground"
+                  }`}
+                >
+                  {v.nombre}
+                </button>
+              ))}
             </div>
           </div>
-          <div>
-            <label className="text-sm font-medium mb-1.5 block">Contraseña</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-9" type="password" placeholder="Tu contraseña" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" onKeyDown={e => e.key === "Enter" && username && password && onConfirm(username, password)} />
+          {selected && (
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Contraseña de {selected.nombre}</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="pl-9 text-xl tracking-widest"
+                  type="password"
+                  inputMode="numeric"
+                  placeholder="••••"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && selected && password && onConfirm(selected.username, selected.nombre, password)}
+                  autoFocus
+                />
+              </div>
             </div>
-          </div>
+          )}
           {error && <p className="text-destructive text-sm bg-destructive/10 p-2 rounded">{error}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
-          <Button onClick={() => onConfirm(username, password)} disabled={isPending || !username || !password}>
-            {isPending ? "Verificando..." : "Autorizar"}
+          <Button
+            onClick={() => selected && onConfirm(selected.username, selected.nombre, password)}
+            disabled={isPending || !selected || !password}
+          >
+            {isPending ? "Verificando..." : "Confirmar"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+async function verificarCredenciales(username: string, password: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const r = await fetch("/api/auth/verify", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const d = await r.json();
+    if (!r.ok) return { ok: false, error: d.error || "Contraseña incorrecta" };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Error de conexión" };
+  }
 }
 
 // ─── Pestaña: Stock en Camioneta ──────────────────────────────────────────────
@@ -209,24 +253,14 @@ function TabCargar() {
   const updateCantidad = (codigo: string, val: number) =>
     setCargaItems(prev => prev.map(i => i.productoCodigo === codigo ? { ...i, cantidad: Math.max(1, Math.min(val, i.stockDisponible)) } : i));
 
-  const handleVerifyAndLoad = async (username: string, password: string) => {
+  const handleVerifyAndLoad = async (username: string, _nombre: string, password: string) => {
     setVerifying(true);
     setCredError("");
-    try {
-      const r = await fetch("/api/auth/verify", {
-        method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
-      const d = await r.json();
-      if (!r.ok) { setCredError(d.error || "Credenciales incorrectas"); return; }
-      setCredOpen(false);
-      cargaMutation.mutate(cargaItems.map(i => ({ productoCodigo: i.productoCodigo, cantidad: i.cantidad })));
-    } catch {
-      setCredError("Error de conexión");
-    } finally {
-      setVerifying(false);
-    }
+    const result = await verificarCredenciales(username, password);
+    setVerifying(false);
+    if (!result.ok) { setCredError(result.error!); return; }
+    setCredOpen(false);
+    cargaMutation.mutate(cargaItems.map(i => ({ productoCodigo: i.productoCodigo, cantidad: i.cantidad })));
   };
 
   return (
@@ -296,6 +330,7 @@ function TabCargar() {
         onConfirm={handleVerifyAndLoad}
         isPending={verifying}
         error={credError}
+        titulo="Autorizar carga de camioneta"
       />
     </div>
   );
@@ -304,13 +339,14 @@ function TabCargar() {
 // ─── Pestaña: Venta en Ruta ───────────────────────────────────────────────────
 function TabVentaRuta({ stock }: { stock: StockItem[] | undefined }) {
   const { toast } = useToast();
-  const { user } = useAuth();
-  const [vendedor, setVendedor] = useState(user?.nombre || "");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [credOpen, setCredOpen] = useState(false);
+  const [credError, setCredError] = useState("");
+  const [verifying, setVerifying] = useState(false);
 
   const ventaMutation = useVentaRutaMutation(() => {
-    toast({ title: "Venta en ruta registrada", description: `Vendedor: ${vendedor}` });
+    toast({ title: "Venta en ruta registrada" });
     setCart([]);
   });
 
@@ -330,6 +366,16 @@ function TabVentaRuta({ stock }: { stock: StockItem[] | undefined }) {
   };
 
   const total = cart.reduce((s, i) => s + i.cantidad * i.precioUnitario, 0);
+
+  const handleVerifyAndSell = async (username: string, nombre: string, password: string) => {
+    setVerifying(true);
+    setCredError("");
+    const result = await verificarCredenciales(username, password);
+    setVerifying(false);
+    if (!result.ok) { setCredError(result.error!); return; }
+    setCredOpen(false);
+    ventaMutation.mutate({ vendedor: nombre, items: cart.map(i => ({ productoCodigo: i.productoCodigo, cantidad: i.cantidad })) });
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -367,14 +413,6 @@ function TabVentaRuta({ stock }: { stock: StockItem[] | undefined }) {
           <CardTitle className="text-base">Resumen de Venta</CardTitle>
         </CardHeader>
         <CardContent className="p-4 space-y-4">
-          <div>
-            <label className="text-xs text-muted-foreground mb-1.5 block font-medium">Vendedor</label>
-            <div className="relative">
-              <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Nombre del vendedor" className="pl-8 text-sm" value={vendedor} onChange={e => setVendedor(e.target.value)} />
-            </div>
-          </div>
-
           <div className="space-y-2 min-h-[60px]">
             {cart.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-3">Seleccioná productos de la lista</p>
@@ -404,14 +442,23 @@ function TabVentaRuta({ stock }: { stock: StockItem[] | undefined }) {
 
           <Button
             className="w-full"
-            onClick={() => ventaMutation.mutate({ vendedor, items: cart.map(i => ({ productoCodigo: i.productoCodigo, cantidad: i.cantidad })) })}
-            disabled={cart.length === 0 || !vendedor.trim() || ventaMutation.isPending}
+            onClick={() => { setCredError(""); setCredOpen(true); }}
+            disabled={cart.length === 0 || ventaMutation.isPending}
           >
             <CheckCircle className="w-4 h-4 mr-2" />
             {ventaMutation.isPending ? "Registrando..." : "Confirmar Venta"}
           </Button>
         </CardContent>
       </Card>
+
+      <CredDialog
+        open={credOpen}
+        onOpenChange={setCredOpen}
+        onConfirm={handleVerifyAndSell}
+        isPending={verifying}
+        error={credError}
+        titulo="Confirmar venta en ruta"
+      />
     </div>
   );
 }
@@ -460,7 +507,6 @@ export default function Camioneta() {
       {tab === "cargar" && <TabCargar />}
       {tab === "venta" && <TabVentaRuta stock={stock} />}
 
-      {/* Dialog: Caducado */}
       <AlertDialog open={!!caducadoDialog} onOpenChange={o => !o && setCaducadoDialog(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

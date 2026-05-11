@@ -1,11 +1,8 @@
 import { Link, useLocation } from "wouter";
 import {
-  Store, ShoppingCart, Package, Users, BarChart, Truck, LogOut, ShieldCheck,
+  Store, ShoppingCart, Package, Users, BarChart, Truck, ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/context/auth";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -13,9 +10,6 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
-  const { user, logout } = useAuth();
-  const { toast } = useToast();
-  const isAdmin = user?.rol === "admin";
 
   const navigation = [
     { name: "Inicio", href: "/", icon: Store },
@@ -25,7 +19,7 @@ export function Layout({ children }: LayoutProps) {
     { name: "Camioneta", href: "/camioneta", icon: Truck },
     { name: "Proveedores", href: "/proveedores", icon: Users },
     { name: "Reportes", href: "/reportes", icon: BarChart },
-    ...(isAdmin ? [{ name: "Usuarios", href: "/usuarios", icon: ShieldCheck }] : []),
+    { name: "Usuarios", href: "/usuarios", icon: ShieldCheck },
   ];
 
   const mobileNav = [
@@ -33,13 +27,8 @@ export function Layout({ children }: LayoutProps) {
     { name: "Ventas", href: "/ventas", icon: ShoppingCart },
     { name: "Camioneta", href: "/camioneta", icon: Truck },
     { name: "Productos", href: "/productos", icon: Package },
-    { name: isAdmin ? "Usuarios" : "Reportes", href: isAdmin ? "/usuarios" : "/reportes", icon: isAdmin ? ShieldCheck : BarChart },
+    { name: "Reportes", href: "/reportes", icon: BarChart },
   ];
-
-  const handleLogout = async () => {
-    await logout();
-    toast({ title: "Sesión cerrada" });
-  };
 
   return (
     <div className="min-h-screen bg-background font-sans">
@@ -78,22 +67,6 @@ export function Layout({ children }: LayoutProps) {
               );
             })}
           </nav>
-
-          {/* User info + logout */}
-          <div className="p-4 border-t border-sidebar-border">
-            <div className="flex items-center gap-3 mb-3 px-1">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-                <span className="text-sm font-bold text-primary">{user?.nombre?.charAt(0).toUpperCase()}</span>
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-sidebar-foreground truncate">{user?.nombre}</p>
-                <p className="text-xs text-sidebar-foreground/60 capitalize">{user?.rol === "admin" ? "Administrador" : "Vendedor"}</p>
-              </div>
-            </div>
-            <Button variant="ghost" size="sm" className="w-full justify-start text-sidebar-foreground/70 hover:text-destructive" onClick={handleLogout}>
-              <LogOut className="w-4 h-4 mr-2" /> Cerrar sesión
-            </Button>
-          </div>
         </aside>
 
         <main className="flex-1 overflow-auto p-8">
@@ -105,18 +78,12 @@ export function Layout({ children }: LayoutProps) {
 
       {/* ── MOBILE: header + contenido + barra inferior ── */}
       <div className="flex flex-col md:hidden min-h-screen">
-        <header className="bg-sidebar border-b border-sidebar-border px-4 py-3 flex items-center justify-between sticky top-0 z-40">
+        <header className="bg-sidebar border-b border-sidebar-border px-4 py-3 flex items-center sticky top-0 z-40">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center">
               <Store className="w-4 h-4 text-primary-foreground" />
             </div>
             <span className="text-lg font-bold tracking-tight text-sidebar-foreground">Panadería Pro</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-sidebar-foreground/60">{user?.nombre}</span>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-sidebar-foreground/60 hover:text-destructive" onClick={handleLogout}>
-              <LogOut className="w-4 h-4" />
-            </Button>
           </div>
         </header>
 

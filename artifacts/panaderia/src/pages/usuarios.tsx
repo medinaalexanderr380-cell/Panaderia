@@ -17,7 +17,6 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Users, Plus, Key, UserX, Edit2, ShieldCheck, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/context/auth";
 
 interface Usuario {
   id: number;
@@ -40,7 +39,6 @@ const apiFetch = (url: string, opts: RequestInit) =>
     .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error); return d; });
 
 export default function Usuarios() {
-  const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: usuarios, isLoading } = useUsuarios();
@@ -78,14 +76,6 @@ export default function Usuarios() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["usuarios"] }); toast({ title: "Usuario desactivado" }); setDialogDesactivar(null); },
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
-
-  if (user?.rol !== "admin") {
-    return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <p className="text-muted-foreground">Solo el administrador puede acceder a esta sección.</p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -139,7 +129,7 @@ export default function Usuarios() {
                       <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-blue-600" onClick={() => { setNuevaPass(""); setConfirmarPass(""); setDialogPassword(u); }}>
                         <Key className="w-3.5 h-3.5" /> Contraseña
                       </Button>
-                      {u.id !== user?.id && u.activo && (
+                      {u.activo && (
                         <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-destructive" onClick={() => setDialogDesactivar(u)}>
                           <UserX className="w-3.5 h-3.5" /> Desactivar
                         </Button>
@@ -153,7 +143,7 @@ export default function Usuarios() {
         </div>
       </Card>
 
-      {/* Dialog: Nuevo usuario */}
+      {/* Dialog: Nuevo */}
       <Dialog open={dialogNuevo} onOpenChange={setDialogNuevo}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Nuevo Usuario</DialogTitle></DialogHeader>
@@ -163,7 +153,7 @@ export default function Usuarios() {
             <div><label className="text-sm font-medium mb-1.5 block">Usuario (para iniciar sesión)</label>
               <Input placeholder="Ej: juan" value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value.toLowerCase().replace(/\s/g, "") }))} /></div>
             <div><label className="text-sm font-medium mb-1.5 block">Contraseña</label>
-              <Input type="password" placeholder="Mínimo 6 caracteres" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} /></div>
+              <Input type="password" placeholder="Mínimo 4 caracteres" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} /></div>
             <div><label className="text-sm font-medium mb-1.5 block">Rol</label>
               <Select value={form.rol} onValueChange={v => setForm(f => ({ ...f, rol: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -183,10 +173,10 @@ export default function Usuarios() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog: Editar usuario */}
+      {/* Dialog: Editar */}
       <Dialog open={!!dialogEditar} onOpenChange={o => !o && setDialogEditar(null)}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Editar Usuario: {dialogEditar?.username}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Editar — {dialogEditar?.username}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div><label className="text-sm font-medium mb-1.5 block">Nombre completo</label>
               <Input value={editForm.nombre} onChange={e => setEditForm(f => ({ ...f, nombre: e.target.value }))} /></div>
@@ -203,19 +193,19 @@ export default function Usuarios() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogEditar(null)}>Cancelar</Button>
             <Button onClick={() => dialogEditar && editarMutation.mutate({ id: dialogEditar.id, ...editForm })} disabled={editarMutation.isPending}>
-              {editarMutation.isPending ? "Guardando..." : "Guardar Cambios"}
+              {editarMutation.isPending ? "Guardando..." : "Guardar"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Dialog: Cambiar contraseña */}
+      {/* Dialog: Contraseña */}
       <Dialog open={!!dialogPassword} onOpenChange={o => !o && setDialogPassword(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Cambiar Contraseña — {dialogPassword?.nombre}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div><label className="text-sm font-medium mb-1.5 block">Nueva contraseña</label>
-              <Input type="password" placeholder="Mínimo 6 caracteres" value={nuevaPass} onChange={e => setNuevaPass(e.target.value)} /></div>
+              <Input type="password" placeholder="Nueva contraseña" value={nuevaPass} onChange={e => setNuevaPass(e.target.value)} /></div>
             <div><label className="text-sm font-medium mb-1.5 block">Confirmar contraseña</label>
               <Input type="password" placeholder="Repetí la contraseña" value={confirmarPass} onChange={e => setConfirmarPass(e.target.value)} /></div>
             {nuevaPass && confirmarPass && nuevaPass !== confirmarPass && (
@@ -226,7 +216,7 @@ export default function Usuarios() {
             <Button variant="outline" onClick={() => setDialogPassword(null)}>Cancelar</Button>
             <Button
               onClick={() => dialogPassword && passwordMutation.mutate({ id: dialogPassword.id, password: nuevaPass })}
-              disabled={passwordMutation.isPending || nuevaPass.length < 6 || nuevaPass !== confirmarPass}
+              disabled={passwordMutation.isPending || nuevaPass.length < 4 || nuevaPass !== confirmarPass}
             >
               {passwordMutation.isPending ? "Guardando..." : "Cambiar Contraseña"}
             </Button>
@@ -240,7 +230,7 @@ export default function Usuarios() {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Desactivar usuario?</AlertDialogTitle>
             <AlertDialogDescription>
-              El usuario <strong>{dialogDesactivar?.nombre}</strong> no podrá iniciar sesión. Podés reactivarlo desde editar.
+              <strong>{dialogDesactivar?.nombre}</strong> no podrá confirmar acciones hasta que lo reactives.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
