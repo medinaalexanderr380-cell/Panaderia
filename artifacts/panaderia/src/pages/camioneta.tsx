@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useListarProductos } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -13,73 +12,97 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Truck, Plus, Trash2, ShoppingCart, AlertTriangle, Search, ArrowDownToLine, Lock, CheckCircle } from "lucide-react";
+import { Truck, Plus, Trash2, ShoppingCart, AlertTriangle, ArrowDownToLine, Lock, CheckCircle, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const fmt = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
 
-interface StockItem { codigo: string; nombre: string; stockCamioneta: number; precioVenta: number; precioCosto: number; unidad: string; descripcion: string }
-interface CartItem { productoCodigo: string; productoNombre: string; cantidad: number; precioUnitario: number; }
-interface CargaItem { productoCodigo: string; productoNombre: string; cantidad: number; stockDisponible: number; }
+type Vendedor = "michel" | "david";
 
-const VENDEDORES = [
+interface StockItem { codigo: string; nombre: string; stockCamioneta: number; precioVenta: number; precioCosto: number; unidad: string; descripcion: string }
+interface CartItem { productoCodigo: string; productoNombre: string; cantidad: number; precioUnitario: number }
+interface CargaItem { productoCodigo: string; productoNombre: string; cantidad: number; proveedor: string }
+
+const VENDEDORES: { username: Vendedor; nombre: string }[] = [
   { username: "michel", nombre: "Michel" },
   { username: "david", nombre: "David" },
 ];
 
-function useCamionetaStock() {
+// ─── Hooks ────────────────────────────────────────────────────────────────────
+
+function useCamionetaStock(vendedor: Vendedor) {
   return useQuery<StockItem[]>({
-    queryKey: ["camioneta", "stock"],
-    queryFn: () => fetch("/api/camioneta/stock", { credentials: "include" }).then(r => r.json()),
+    queryKey: ["camioneta", "stock", vendedor],
+    queryFn: () => fetch(`/api/camioneta/stock?vendedor=${vendedor}`, { credentials: "include" }).then(r => r.json()),
+    enabled: !!vendedor,
   });
 }
 
-function useCargaMutation(onSuccess: () => void) {
+function useCargaMutation(vendedor: Vendedor, onSuccess: () => void) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (items: CargaItem[]) =>
+      fetch("/api/camioneta/cargar", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vendedor, items }),
+      }).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error); return d; }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["camioneta", "stock", vendedor] });
+      onSuccess();
+    },
+  });
+}
+
+function useVentaRutaMutation(vendedor: Vendedor, onSuccess: () => void) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (items: { productoCodigo: string; cantidad: number }[]) =>
-      fetch("/api/camioneta/cargar", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items }) })
-        .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error); return d; }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["camioneta", "stock"] }); queryClient.invalidateQueries({ queryKey: ["listarProductos"] }); onSuccess(); },
+      fetch("/api/camioneta/ventas", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vendedor, items }),
+      }).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error); return d; }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["camioneta", "stock", vendedor] });
+      onSuccess();
+    },
   });
 }
 
-function useVentaRutaMutation(onSuccess: () => void) {
+function useCaducadoMutation(vendedor: Vendedor, onSuccess: () => void) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { vendedor: string; items: { productoCodigo: string; cantidad: number }[] }) =>
-      fetch("/api/camioneta/ventas", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) })
-        .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error); return d; }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["camioneta", "stock"] }); onSuccess(); },
-  });
-}
-
-function useCaducadoMutation(onSuccess: () => void) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { productoCodigo: string; cantidad: number; origen: string }) =>
-      fetch("/api/camioneta/caducado", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) })
-        .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error); return d; }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["camioneta", "stock"] }); queryClient.invalidateQueries({ queryKey: ["listarProductos"] }); onSuccess(); },
+    mutationFn: (data: { productoCodigo: string; cantidad: number }) =>
+      fetch("/api/camioneta/caducado", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...data, origen: "camioneta", vendedor }),
+      }).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error); return d; }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["camioneta", "stock", vendedor] });
+      onSuccess();
+    },
   });
 }
 
 // ─── Diálogo de verificación ──────────────────────────────────────────────────
 interface CredDialogProps {
   open: boolean;
+  vendedor: Vendedor;
   onOpenChange: (v: boolean) => void;
-  onConfirm: (username: string, nombre: string, password: string) => void;
+  onConfirm: (password: string) => void;
   isPending: boolean;
   error?: string;
   titulo?: string;
 }
 
-function CredDialog({ open, onOpenChange, onConfirm, isPending, error, titulo }: CredDialogProps) {
-  const [selected, setSelected] = useState<typeof VENDEDORES[0] | null>(null);
+function CredDialog({ open, vendedor, onOpenChange, onConfirm, isPending, error, titulo }: CredDialogProps) {
   const [password, setPassword] = useState("");
+  const nombre = VENDEDORES.find(v => v.username === vendedor)?.nombre ?? vendedor;
 
   const handleClose = (v: boolean) => {
-    if (!v) { setSelected(null); setPassword(""); }
+    if (!v) setPassword("");
     onOpenChange(v);
   };
 
@@ -91,51 +114,26 @@ function CredDialog({ open, onOpenChange, onConfirm, isPending, error, titulo }:
             <Lock className="w-5 h-5 text-primary" /> {titulo || "Identificación"}
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div>
-            <label className="text-sm font-medium mb-2 block">¿Quién sos?</label>
-            <div className="grid grid-cols-2 gap-3">
-              {VENDEDORES.map(v => (
-                <button
-                  key={v.username}
-                  onClick={() => setSelected(v)}
-                  className={`py-4 rounded-xl border-2 font-semibold text-lg transition-all ${
-                    selected?.username === v.username
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border bg-card hover:border-primary/40 text-foreground"
-                  }`}
-                >
-                  {v.nombre}
-                </button>
-              ))}
-            </div>
+        <div className="space-y-3 py-2">
+          <p className="text-sm text-muted-foreground">Confirmar identidad de <strong>{nombre}</strong></p>
+          <div className="relative">
+            <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="pl-9 text-xl tracking-widest"
+              type="password"
+              inputMode="numeric"
+              placeholder="••••"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && password && onConfirm(password)}
+              autoFocus
+            />
           </div>
-          {selected && (
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Contraseña de {selected.nombre}</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  className="pl-9 text-xl tracking-widest"
-                  type="password"
-                  inputMode="numeric"
-                  placeholder="••••"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && selected && password && onConfirm(selected.username, selected.nombre, password)}
-                  autoFocus
-                />
-              </div>
-            </div>
-          )}
           {error && <p className="text-destructive text-sm bg-destructive/10 p-2 rounded">{error}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
-          <Button
-            onClick={() => selected && onConfirm(selected.username, selected.nombre, password)}
-            disabled={isPending || !selected || !password}
-          >
+          <Button onClick={() => onConfirm(password)} disabled={isPending || !password}>
             {isPending ? "Verificando..." : "Confirmar"}
           </Button>
         </DialogFooter>
@@ -159,12 +157,15 @@ async function verificarCredenciales(username: string, password: string): Promis
   }
 }
 
-// ─── Pestaña: Stock en Camioneta ──────────────────────────────────────────────
-function TabStock({ stock, isLoading, onCaducado }: { stock: StockItem[] | undefined; isLoading: boolean; onCaducado: (item: StockItem) => void }) {
+// ─── Pestaña: Stock ───────────────────────────────────────────────────────────
+function TabStock({ vendedor, stock, isLoading, onCaducado }: { vendedor: Vendedor; stock: StockItem[] | undefined; isLoading: boolean; onCaducado: (item: StockItem) => void }) {
+  const nombre = VENDEDORES.find(v => v.username === vendedor)?.nombre;
   return (
     <Card>
       <CardHeader className="bg-muted/30 border-b pb-4">
-        <CardTitle className="flex items-center gap-2"><Truck className="w-5 h-5 text-primary" /> Inventario en Camioneta</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <Truck className="w-5 h-5 text-primary" /> Inventario de {nombre}
+        </CardTitle>
       </CardHeader>
       <div className="overflow-x-auto">
         <Table>
@@ -184,7 +185,7 @@ function TabStock({ stock, isLoading, onCaducado }: { stock: StockItem[] | undef
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-12">
                   <Truck className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                  <p className="text-muted-foreground">La camioneta está vacía. Cargá productos desde la pestaña "Cargar".</p>
+                  <p className="text-muted-foreground">La camioneta de {nombre} está vacía. Cargá productos desde "Cargar".</p>
                 </TableCell>
               </TableRow>
             ) : stock.map(item => (
@@ -220,103 +221,161 @@ function TabStock({ stock, isLoading, onCaducado }: { stock: StockItem[] | undef
   );
 }
 
-// ─── Pestaña: Cargar Camioneta ────────────────────────────────────────────────
-function TabCargar() {
+// ─── Pestaña: Cargar ──────────────────────────────────────────────────────────
+function TabCargar({ vendedor }: { vendedor: Vendedor }) {
   const { toast } = useToast();
-  const { data: productos } = useListarProductos();
-  const [search, setSearch] = useState("");
-  const [cargaItems, setCargaItems] = useState<CargaItem[]>([]);
+  const [items, setItems] = useState<CargaItem[]>([]);
+  const [codigoInput, setCodigoInput] = useState("");
+  const [nombreInput, setNombreInput] = useState("");
+  const [proveedorInput, setProveedorInput] = useState("");
+  const [cantidadInput, setCantidadInput] = useState<number | "">("");
   const [credOpen, setCredOpen] = useState(false);
   const [credError, setCredError] = useState("");
   const [verifying, setVerifying] = useState(false);
 
-  const cargaMutation = useCargaMutation(() => {
-    toast({ title: "¡Camioneta cargada exitosamente!" });
-    setCargaItems([]);
+  const nombre = VENDEDORES.find(v => v.username === vendedor)?.nombre;
+
+  const cargaMutation = useCargaMutation(vendedor, () => {
+    toast({ title: `¡Camioneta de ${nombre} cargada exitosamente!` });
+    setItems([]);
+    setProveedorInput("");
   });
 
-  const productosFiltrados = (productos ?? []).filter(p =>
-    p.stock > 0 && (
-      p.nombre.toLowerCase().includes(search.toLowerCase()) ||
-      p.codigo.toLowerCase().includes(search.toLowerCase())
-    )
-  );
-
-  const addToCarga = (p: any) => {
-    setCargaItems(prev => {
-      const ex = prev.find(i => i.productoCodigo === p.codigo);
-      if (ex) return prev.map(i => i.productoCodigo === p.codigo ? { ...i, cantidad: Math.min(i.cantidad + 1, i.stockDisponible) } : i);
-      return [...prev, { productoCodigo: p.codigo, productoNombre: p.nombre, cantidad: 1, stockDisponible: p.stock }];
-    });
+  const handleAddItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cantidad = Number(cantidadInput);
+    if (!codigoInput.trim() || !nombreInput.trim() || !cantidad || cantidad <= 0) {
+      toast({ title: "Completá todos los campos", variant: "destructive" });
+      return;
+    }
+    const codigo = codigoInput.trim().toUpperCase();
+    const existing = items.find(i => i.productoCodigo === codigo);
+    if (existing) {
+      setItems(prev => prev.map(i => i.productoCodigo === codigo ? { ...i, cantidad: i.cantidad + cantidad } : i));
+    } else {
+      setItems(prev => [...prev, {
+        productoCodigo: codigo,
+        productoNombre: nombreInput.trim(),
+        cantidad,
+        proveedor: proveedorInput.trim(),
+      }]);
+    }
+    setCodigoInput("");
+    setNombreInput("");
+    setCantidadInput("");
   };
 
-  const updateCantidad = (codigo: string, val: number) =>
-    setCargaItems(prev => prev.map(i => i.productoCodigo === codigo ? { ...i, cantidad: Math.max(1, Math.min(val, i.stockDisponible)) } : i));
-
-  const handleVerifyAndLoad = async (username: string, _nombre: string, password: string) => {
+  const handleVerifyAndLoad = async (password: string) => {
     setVerifying(true);
     setCredError("");
-    const result = await verificarCredenciales(username, password);
+    const result = await verificarCredenciales(vendedor, password);
     setVerifying(false);
     if (!result.ok) { setCredError(result.error!); return; }
     setCredOpen(false);
-    cargaMutation.mutate(cargaItems.map(i => ({ productoCodigo: i.productoCodigo, cantidad: i.cantidad })));
+    cargaMutation.mutate(items);
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <Card className="lg:col-span-2">
         <CardHeader className="bg-muted/30 border-b pb-4">
-          <CardTitle className="text-base">Seleccionar Productos del Stock General</CardTitle>
+          <CardTitle className="text-base">Agregar producto a la camioneta de {nombre}</CardTitle>
         </CardHeader>
-        <CardContent className="p-4 space-y-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar producto por nombre o código..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+        <CardContent className="p-6 space-y-4">
+          <div className="mb-2">
+            <label className="text-sm font-medium text-muted-foreground mb-1 block">Proveedor / Origen</label>
+            <Input placeholder="Nombre del proveedor..." value={proveedorInput} onChange={e => setProveedorInput(e.target.value)} />
           </div>
-          <div className="max-h-80 overflow-y-auto space-y-1">
-            {productosFiltrados.length === 0 ? (
-              <p className="text-center py-8 text-muted-foreground text-sm">No hay productos con stock disponible</p>
-            ) : productosFiltrados.map(p => (
-              <div key={p.codigo} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 cursor-pointer" onClick={() => addToCarga(p)}>
-                <div>
-                  <p className="font-medium text-sm">{p.nombre}</p>
-                  <p className="text-xs text-muted-foreground">{p.codigo} · Stock: {p.stock} {p.unidad}</p>
-                </div>
-                <Button variant="ghost" size="sm" className="text-primary"><Plus className="w-4 h-4" /></Button>
+          <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-3">
+            <h3 className="text-sm font-medium">Agregar producto</h3>
+            <form onSubmit={handleAddItem} className="flex flex-wrap items-end gap-3">
+              <div className="w-28">
+                <label className="text-xs text-muted-foreground mb-1 block">Código</label>
+                <Input value={codigoInput} onChange={e => setCodigoInput(e.target.value)} placeholder="PAN001" required />
               </div>
-            ))}
+              <div className="flex-1 min-w-[140px]">
+                <label className="text-xs text-muted-foreground mb-1 block">Nombre del producto</label>
+                <Input value={nombreInput} onChange={e => setNombreInput(e.target.value)} placeholder="Pan de sal..." required />
+              </div>
+              <div className="w-24">
+                <label className="text-xs text-muted-foreground mb-1 block">Cantidad</label>
+                <Input
+                  type="number" min="1"
+                  value={cantidadInput}
+                  onChange={e => setCantidadInput(e.target.value === "" ? "" : Number(e.target.value))}
+                  placeholder="0"
+                  required
+                />
+              </div>
+              <Button type="submit" variant="secondary" className="shrink-0 gap-1">
+                <Plus className="w-4 h-4" /> Agregar
+              </Button>
+            </form>
           </div>
+
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Código</TableHead>
+                <TableHead>Producto</TableHead>
+                <TableHead>Proveedor</TableHead>
+                <TableHead className="text-center">Cant.</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-sm">
+                    <Truck className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                    Sin productos agregados
+                  </TableCell>
+                </TableRow>
+              ) : items.map((item, idx) => (
+                <TableRow key={idx}>
+                  <TableCell className="font-mono text-xs">{item.productoCodigo}</TableCell>
+                  <TableCell className="font-medium text-sm">{item.productoNombre}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{item.proveedor || "—"}</TableCell>
+                  <TableCell className="text-center font-bold">{item.cantidad}</TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
       <Card className="h-fit">
         <CardHeader className="bg-muted/30 border-b pb-4">
-          <CardTitle className="text-base flex items-center gap-2"><Truck className="w-4 h-4 text-primary" /> A Cargar</CardTitle>
+          <CardTitle className="text-base">Resumen de Carga</CardTitle>
         </CardHeader>
-        <CardContent className="p-4 space-y-4">
-          {cargaItems.length === 0 ? (
-            <p className="text-center py-6 text-muted-foreground text-sm">Seleccioná productos de la lista</p>
-          ) : cargaItems.map(item => (
-            <div key={item.productoCodigo} className="flex items-center gap-2">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{item.productoNombre}</p>
-                <p className="text-xs text-muted-foreground">Máx: {item.stockDisponible}</p>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateCantidad(item.productoCodigo, item.cantidad - 1)}>−</Button>
-                <span className="w-8 text-center font-bold text-sm">{item.cantidad}</span>
-                <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateCantidad(item.productoCodigo, item.cantidad + 1)}>+</Button>
-              </div>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setCargaItems(prev => prev.filter(i => i.productoCodigo !== item.productoCodigo))}>
-                <Trash2 className="w-3.5 h-3.5" />
-              </Button>
+        <CardContent className="p-6 space-y-4">
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <div className="flex justify-between">
+              <span>Camioneta:</span>
+              <span className="font-medium text-foreground">{nombre}</span>
             </div>
-          ))}
+            <div className="flex justify-between">
+              <span>Productos distintos:</span>
+              <span>{items.length}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Unidades totales:</span>
+              <span className="font-bold text-foreground">{items.reduce((s, i) => s + i.cantidad, 0)}</span>
+            </div>
+          </div>
           <Button
-            className="w-full mt-4"
-            onClick={() => { if (cargaItems.length === 0) { toast({ title: "Agregá productos primero", variant: "destructive" }); return; } setCredError(""); setCredOpen(true); }}
-            disabled={cargaItems.length === 0 || cargaMutation.isPending}
+            className="w-full h-12 mt-2"
+            onClick={() => {
+              if (items.length === 0) { toast({ title: "Agregá productos primero", variant: "destructive" }); return; }
+              setCredError("");
+              setCredOpen(true);
+            }}
+            disabled={items.length === 0 || cargaMutation.isPending}
           >
             <Lock className="w-4 h-4 mr-2" />
             {cargaMutation.isPending ? "Cargando..." : "Confirmar Carga"}
@@ -326,6 +385,7 @@ function TabCargar() {
 
       <CredDialog
         open={credOpen}
+        vendedor={vendedor}
         onOpenChange={setCredOpen}
         onConfirm={handleVerifyAndLoad}
         isPending={verifying}
@@ -337,7 +397,7 @@ function TabCargar() {
 }
 
 // ─── Pestaña: Venta en Ruta ───────────────────────────────────────────────────
-function TabVentaRuta({ stock }: { stock: StockItem[] | undefined }) {
+function TabVentaRuta({ vendedor, stock }: { vendedor: Vendedor; stock: StockItem[] | undefined }) {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -345,7 +405,9 @@ function TabVentaRuta({ stock }: { stock: StockItem[] | undefined }) {
   const [credError, setCredError] = useState("");
   const [verifying, setVerifying] = useState(false);
 
-  const ventaMutation = useVentaRutaMutation(() => {
+  const nombre = VENDEDORES.find(v => v.username === vendedor)?.nombre;
+
+  const ventaMutation = useVentaRutaMutation(vendedor, () => {
     toast({ title: "Venta en ruta registrada" });
     setCart([]);
   });
@@ -359,7 +421,10 @@ function TabVentaRuta({ stock }: { stock: StockItem[] | undefined }) {
     setCart(prev => {
       const ex = prev.find(i => i.productoCodigo === item.codigo);
       const inCart = ex?.cantidad ?? 0;
-      if (inCart >= item.stockCamioneta) { toast({ title: `Sin stock en camioneta para ${item.nombre}`, variant: "destructive" }); return prev; }
+      if (inCart >= item.stockCamioneta) {
+        toast({ title: `Sin stock en camioneta para ${item.nombre}`, variant: "destructive" });
+        return prev;
+      }
       if (ex) return prev.map(i => i.productoCodigo === item.codigo ? { ...i, cantidad: i.cantidad + 1 } : i);
       return [...prev, { productoCodigo: item.codigo, productoNombre: item.nombre, cantidad: 1, precioUnitario: item.precioVenta }];
     });
@@ -367,29 +432,30 @@ function TabVentaRuta({ stock }: { stock: StockItem[] | undefined }) {
 
   const total = cart.reduce((s, i) => s + i.cantidad * i.precioUnitario, 0);
 
-  const handleVerifyAndSell = async (username: string, nombre: string, password: string) => {
+  const handleVerifyAndSell = async (password: string) => {
     setVerifying(true);
     setCredError("");
-    const result = await verificarCredenciales(username, password);
+    const result = await verificarCredenciales(vendedor, password);
     setVerifying(false);
     if (!result.ok) { setCredError(result.error!); return; }
     setCredOpen(false);
-    ventaMutation.mutate({ vendedor: nombre, items: cart.map(i => ({ productoCodigo: i.productoCodigo, cantidad: i.cantidad })) });
+    ventaMutation.mutate(cart.map(i => ({ productoCodigo: i.productoCodigo, cantidad: i.cantidad })));
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <Card className="lg:col-span-2">
         <CardHeader className="bg-primary/5 border-b pb-4">
-          <CardTitle className="text-base flex items-center gap-2"><ShoppingCart className="w-4 h-4 text-primary" /> Productos en Camioneta</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            <ShoppingCart className="w-4 h-4 text-primary" /> Productos de {nombre}
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-4 space-y-3">
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar producto por nombre..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+            <Input placeholder="Buscar producto por nombre..." className="pl-4" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           {!stock?.length ? (
-            <p className="text-center py-8 text-muted-foreground">La camioneta está vacía. Cargá productos primero.</p>
+            <p className="text-center py-8 text-muted-foreground">La camioneta de {nombre} está vacía. Cargá productos primero.</p>
           ) : (
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {stockFiltrado.length === 0 ? (
@@ -432,19 +498,13 @@ function TabVentaRuta({ stock }: { stock: StockItem[] | undefined }) {
               </div>
             ))}
           </div>
-
           {cart.length > 0 && (
             <div className="border-t pt-3 flex justify-between font-bold">
               <span>Total</span>
               <span className="text-primary">{fmt(total)}</span>
             </div>
           )}
-
-          <Button
-            className="w-full"
-            onClick={() => { setCredError(""); setCredOpen(true); }}
-            disabled={cart.length === 0 || ventaMutation.isPending}
-          >
+          <Button className="w-full" onClick={() => { setCredError(""); setCredOpen(true); }} disabled={cart.length === 0 || ventaMutation.isPending}>
             <CheckCircle className="w-4 h-4 mr-2" />
             {ventaMutation.isPending ? "Registrando..." : "Confirmar Venta"}
           </Button>
@@ -453,6 +513,7 @@ function TabVentaRuta({ stock }: { stock: StockItem[] | undefined }) {
 
       <CredDialog
         open={credOpen}
+        vendedor={vendedor}
         onOpenChange={setCredOpen}
         onConfirm={handleVerifyAndSell}
         isPending={verifying}
@@ -467,16 +528,34 @@ function TabVentaRuta({ stock }: { stock: StockItem[] | undefined }) {
 type Tab = "stock" | "cargar" | "venta";
 
 export default function Camioneta() {
+  const [vendedorSeleccionado, setVendedorSeleccionado] = useState<Vendedor | null>(null);
   const [tab, setTab] = useState<Tab>("stock");
-  const { data: stock, isLoading } = useCamionetaStock();
   const { toast } = useToast();
-  const [caducadoDialog, setCaducadoDialog] = useState<StockItem | null>(null);
-  const [caducadoCantidad, setCaducadoCantidad] = useState(1);
 
-  const caducadoMutation = useCaducadoMutation(() => {
+  const { data: stock, isLoading } = useCamionetaStock(vendedorSeleccionado ?? "michel");
+
+  const queryClient = useQueryClient();
+  const [caducadoDialog, setCaducadoDialog] = useState<StockItem | null>(null);
+  const [caducadoCantidad, setCaducadoCantidad] = useState<number | "">(1);
+  const [credCaducadoOpen, setCredCaducadoOpen] = useState(false);
+  const [credCaducadoError, setCredCaducadoError] = useState("");
+  const [verifyingCaducado, setVerifyingCaducado] = useState(false);
+
+  const caducadoMutation = useCaducadoMutation(vendedorSeleccionado ?? "michel", () => {
     toast({ title: "Pérdida registrada correctamente" });
     setCaducadoDialog(null);
+    setCaducadoCantidad(1);
   });
+
+  const handleCaducadoVerify = async (password: string) => {
+    setVerifyingCaducado(true);
+    setCredCaducadoError("");
+    const result = await verificarCredenciales(vendedorSeleccionado!, password);
+    setVerifyingCaducado(false);
+    if (!result.ok) { setCredCaducadoError(result.error!); return; }
+    setCredCaducadoOpen(false);
+    caducadoMutation.mutate({ productoCodigo: caducadoDialog!.codigo, cantidad: Number(caducadoCantidad) });
+  };
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: "stock", label: "Mi Camioneta", icon: Truck },
@@ -484,18 +563,60 @@ export default function Camioneta() {
     { id: "venta", label: "Venta en Ruta", icon: ShoppingCart },
   ];
 
+  // ── Selector de vendedor ────────────────────────────────────────────────────
+  if (!vendedorSeleccionado) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+          <Truck className="w-8 h-8 text-primary" /> Mi Camioneta
+        </h1>
+        <div className="max-w-sm mx-auto mt-12 space-y-6 text-center">
+          <div className="p-4 rounded-full bg-primary/10 w-20 h-20 flex items-center justify-center mx-auto">
+            <User className="w-10 h-10 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold mb-1">¿Cuál es tu camioneta?</h2>
+            <p className="text-muted-foreground text-sm">Seleccioná tu nombre para ver y gestionar tu inventario</p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            {VENDEDORES.map(v => (
+              <button
+                key={v.username}
+                onClick={() => { setVendedorSeleccionado(v.username); setTab("stock"); }}
+                className="py-8 rounded-2xl border-2 font-bold text-xl transition-all border-border bg-card hover:border-primary hover:bg-primary/5 hover:text-primary"
+              >
+                {v.nombre}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const nombreVendedor = VENDEDORES.find(v => v.username === vendedorSeleccionado)?.nombre;
+
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-        <Truck className="w-8 h-8 text-primary" /> Mi Camioneta
-      </h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+          <Truck className="w-8 h-8 text-primary" /> Camioneta de {nombreVendedor}
+        </h1>
+        <Button variant="outline" size="sm" onClick={() => { setVendedorSeleccionado(null); setTab("stock"); }}>
+          Cambiar
+        </Button>
+      </div>
 
       <div className="flex gap-2 border-b border-border">
         {tabs.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              tab === t.id
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
           >
             <t.icon className="w-4 h-4" />
             {t.label}
@@ -503,39 +624,64 @@ export default function Camioneta() {
         ))}
       </div>
 
-      {tab === "stock" && <TabStock stock={stock} isLoading={isLoading} onCaducado={item => { setCaducadoDialog(item); setCaducadoCantidad(1); }} />}
-      {tab === "cargar" && <TabCargar />}
-      {tab === "venta" && <TabVentaRuta stock={stock} />}
+      {tab === "stock" && (
+        <TabStock
+          vendedor={vendedorSeleccionado}
+          stock={stock}
+          isLoading={isLoading}
+          onCaducado={(item) => { setCaducadoDialog(item); setCaducadoCantidad(1); }}
+        />
+      )}
+      {tab === "cargar" && <TabCargar vendedor={vendedorSeleccionado} />}
+      {tab === "venta" && <TabVentaRuta vendedor={vendedorSeleccionado} stock={stock} />}
 
-      <AlertDialog open={!!caducadoDialog} onOpenChange={o => !o && setCaducadoDialog(null)}>
+      {/* Diálogo caducado */}
+      <AlertDialog open={!!caducadoDialog} onOpenChange={open => { if (!open) { setCaducadoDialog(null); setCaducadoCantidad(1); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
-              <AlertTriangle className="w-5 h-5" /> Registrar Producto Caducado
-            </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-3 pt-2">
-              <p>Producto: <strong>{caducadoDialog?.nombre}</strong></p>
-              <p>Stock en camioneta: <strong>{caducadoDialog?.stockCamioneta}</strong></p>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Cantidad a dar de baja:</label>
-                <Input type="number" min={1} max={caducadoDialog?.stockCamioneta} value={caducadoCantidad} onChange={e => setCaducadoCantidad(Number(e.target.value))} />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Pérdida estimada: <strong className="text-destructive">{caducadoDialog ? fmt(caducadoDialog.precioCosto * caducadoCantidad) : ""}</strong>
-              </p>
+            <AlertDialogTitle>Registrar producto caducado</AlertDialogTitle>
+            <AlertDialogDescription>
+              {caducadoDialog?.nombre} — Stock a bordo: {caducadoDialog?.stockCamioneta}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="py-2">
+            <label className="text-sm font-medium mb-1 block">¿Cuántas unidades se perdieron?</label>
+            <Input
+              type="number" min="1"
+              value={caducadoCantidad}
+              onChange={e => setCaducadoCantidad(e.target.value === "" ? "" : Number(e.target.value))}
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-amber-600 hover:bg-amber-700 text-white"
-              onClick={() => caducadoDialog && caducadoMutation.mutate({ productoCodigo: caducadoDialog.codigo, cantidad: caducadoCantidad, origen: "camioneta" })}
+              className="bg-amber-600 hover:bg-amber-700"
+              onClick={() => {
+                if (!caducadoCantidad || Number(caducadoCantidad) <= 0) {
+                  toast({ title: "Cantidad inválida", variant: "destructive" });
+                  return;
+                }
+                setCredCaducadoError("");
+                setCredCaducadoOpen(true);
+              }}
             >
-              Registrar como Caducado
+              Confirmar pérdida
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {vendedorSeleccionado && (
+        <CredDialog
+          open={credCaducadoOpen}
+          vendedor={vendedorSeleccionado}
+          onOpenChange={setCredCaducadoOpen}
+          onConfirm={handleCaducadoVerify}
+          isPending={verifyingCaducado}
+          error={credCaducadoError}
+          titulo="Confirmar pérdida / caducado"
+        />
+      )}
     </div>
   );
 }

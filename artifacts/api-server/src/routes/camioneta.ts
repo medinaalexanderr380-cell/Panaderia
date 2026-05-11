@@ -7,92 +7,99 @@ import { requireAuth } from "../middleware/auth";
 const router = Router();
 router.use(requireAuth);
 
-router.get("/stock", async (req, res) => {
-  const productos = await db
-    .select({
-      codigo: productosTable.codigo,
-      nombre: productosTable.nombre,
-      descripcion: productosTable.descripcion,
-      stockCamioneta: productosTable.stockCamioneta,
-      precioVenta: productosTable.precioVenta,
-      precioCosto: productosTable.precioCosto,
-      unidad: productosTable.unidad,
-    })
-    .from(productosTable)
-    .where(sql`${productosTable.stockCamioneta} > 0`)
-    .orderBy(productosTable.nombre);
+type Vendedor = "michel" | "david";
 
-  return res.json(productos.map(p => ({
-    ...p,
-    precioVenta: Number(p.precioVenta),
-    precioCosto: Number(p.precioCosto),
-  })));
+function validarVendedor(v: unknown): v is Vendedor {
+  return v === "michel" || v === "david";
+}
+
+router.get("/stock", async (req, res) => {
+  const vendedor = (req.query["vendedor"] as string | undefined)?.toLowerCase();
+  if (!validarVendedor(vendedor))
+    return res.status(400).json({ error: "Parámetro vendedor requerido (michel o david)" });
+
+  const productos = await db.select().from(productosTable);
+
+  const filtrado = productos
+    .filter(p => vendedor === "michel" ? p.stockCamionetaMichel > 0 : p.stockCamionetaDavid > 0)
+    .sort((a, b) => a.nombre.localeCompare(b.nombre))
+    .map(p => ({
+      codigo: p.codigo,
+      nombre: p.nombre,
+      descripcion: p.descripcion,
+      stockCamioneta: vendedor === "michel" ? p.stockCamionetaMichel : p.stockCamionetaDavid,
+      precioVenta: Number(p.precioVenta),
+      precioCosto: Number(p.precioCosto),
+      unidad: p.unidad,
+    }));
+
+  return res.json(filtrado);
 });
 
 router.post("/cargar", async (req, res) => {
-  const { items } = req.body as { items: { productoCodigo: string; cantidad: number }[] };
+  const { vendedor, items } = req.body as {
+    vendedor: string;
+    items: { productoCodigo: string; productoNombre: string; cantidad: number; proveedor?: string }[];
+  };
+
+  const v = vendedor?.toLowerCase();
+  if (!validarVendedor(v))
+    return res.status(400).json({ error: "Vendedor inválido (michel o david)" });
   if (!items || !Array.isArray(items) || items.length === 0)
     return res.status(400).json({ error: "Se requieren items para cargar" });
 
   const resultados = [];
+
   for (const item of items) {
-    if (!item.productoCodigo || !item.cantidad || item.cantidad <= 0)
+    if (!item.productoCodigo?.trim() || !item.productoNombre?.trim() || !item.cantidad || item.cantidad <= 0)
       return res.status(400).json({ error: `Item inválido: ${JSON.stringify(item)}` });
 
-    const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, item.productoCodigo));
-    if (!producto) return res.status(404).json({ error: `Producto no encontrado: ${item.productoCodigo}` });
-    if (producto.stock < item.cantidad)
-      return res.status(400).json({ error: `Stock insuficiente para ${producto.nombre}. Disponible: ${producto.stock}` });
+    const codigo = item.productoCodigo.trim().toUpperCase();
+    const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, codigo));
 
-    const [updated] = await db
-      .update(productosTable)
-      .set({
-        stock: sql`${productosTable.stock} - ${item.cantidad}`,
-        stockCamioneta: sql`${productosTable.stockCamioneta} + ${item.cantidad}`,
-        actualizadoEn: new Date(),
-      })
-      .where(eq(productosTable.codigo, item.productoCodigo))
-      .returning();
+    let updated;
+    if (producto) {
+      if (v === "michel") {
+        [updated] = await db.update(productosTable).set({
+          stockCamionetaMichel: sql`${productosTable.stockCamionetaMichel} + ${item.cantidad}`,
+          actualizadoEn: new Date(),
+        }).where(eq(productosTable.codigo, codigo)).returning();
+      } else {
+        [updated] = await db.update(productosTable).set({
+          stockCamionetaDavid: sql`${productosTable.stockCamionetaDavid} + ${item.cantidad}`,
+          actualizadoEn: new Date(),
+        }).where(eq(productosTable.codigo, codigo)).returning();
+      }
+    } else {
+      [updated] = await db.insert(productosTable).values({
+        codigo,
+        nombre: item.productoNombre.trim(),
+        descripcion: "",
+        precioVenta: "0",
+        precioCosto: "0",
+        stock: 0,
+        stockCamioneta: 0,
+        stockCamionetaMichel: v === "michel" ? item.cantidad : 0,
+        stockCamionetaDavid: v === "david" ? item.cantidad : 0,
+        stockMinimo: 0,
+        unidad: "unidad",
+      }).returning();
+    }
 
-    resultados.push({ codigo: updated.codigo, nombre: updated.nombre, stockCamioneta: updated.stockCamioneta, stock: updated.stock });
+    resultados.push({ codigo: updated.codigo, nombre: updated.nombre });
   }
 
   return res.json({ mensaje: "Carga realizada exitosamente", resultados });
 });
 
-router.post("/descargar", async (req, res) => {
-  const { items } = req.body as { items: { productoCodigo: string; cantidad: number }[] };
-  if (!items || !Array.isArray(items) || items.length === 0)
-    return res.status(400).json({ error: "Se requieren items para descargar" });
-
-  const resultados = [];
-  for (const item of items) {
-    const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, item.productoCodigo));
-    if (!producto) return res.status(404).json({ error: `Producto no encontrado: ${item.productoCodigo}` });
-    if (producto.stockCamioneta < item.cantidad)
-      return res.status(400).json({ error: `Stock en camioneta insuficiente para ${producto.nombre}` });
-
-    const [updated] = await db
-      .update(productosTable)
-      .set({
-        stock: sql`${productosTable.stock} + ${item.cantidad}`,
-        stockCamioneta: sql`${productosTable.stockCamioneta} - ${item.cantidad}`,
-        actualizadoEn: new Date(),
-      })
-      .where(eq(productosTable.codigo, item.productoCodigo))
-      .returning();
-
-    resultados.push({ codigo: updated.codigo, nombre: updated.nombre, stockCamioneta: updated.stockCamioneta, stock: updated.stock });
-  }
-
-  return res.json({ mensaje: "Descarga realizada", resultados });
-});
-
 router.post("/ventas", async (req, res) => {
-  const s = req.session as any;
   const { vendedor, items } = req.body as { vendedor: string; items: { productoCodigo: string; cantidad: number }[] };
   if (!vendedor || !items || items.length === 0)
     return res.status(400).json({ error: "Vendedor e items requeridos" });
+
+  const v = vendedor.toLowerCase();
+  if (!validarVendedor(v))
+    return res.status(400).json({ error: "Vendedor inválido" });
 
   let totalVenta = 0;
   let totalGanancia = 0;
@@ -101,8 +108,10 @@ router.post("/ventas", async (req, res) => {
   for (const item of items) {
     const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, item.productoCodigo));
     if (!producto) return res.status(404).json({ error: `Producto no encontrado: ${item.productoCodigo}` });
-    if (producto.stockCamioneta < item.cantidad)
-      return res.status(400).json({ error: `Stock insuficiente en camioneta para ${producto.nombre}. Disponible: ${producto.stockCamioneta}` });
+
+    const stockDisp = v === "michel" ? producto.stockCamionetaMichel : producto.stockCamionetaDavid;
+    if (stockDisp < item.cantidad)
+      return res.status(400).json({ error: `Stock insuficiente en camioneta de ${vendedor} para ${producto.nombre}. Disponible: ${stockDisp}` });
 
     const precioVenta = Number(producto.precioVenta);
     const precioCosto = Number(producto.precioCosto);
@@ -130,25 +139,38 @@ router.post("/ventas", async (req, res) => {
       precioCosto: String(item.precioCosto),
       subtotal: String(item.subtotal),
     });
-    await db.update(productosTable).set({
-      stockCamioneta: sql`${productosTable.stockCamioneta} - ${item.cantidad}`,
-      actualizadoEn: new Date(),
-    }).where(eq(productosTable.codigo, item.codigo));
+    if (v === "michel") {
+      await db.update(productosTable).set({
+        stockCamionetaMichel: sql`${productosTable.stockCamionetaMichel} - ${item.cantidad}`,
+        actualizadoEn: new Date(),
+      }).where(eq(productosTable.codigo, item.codigo));
+    } else {
+      await db.update(productosTable).set({
+        stockCamionetaDavid: sql`${productosTable.stockCamionetaDavid} - ${item.cantidad}`,
+        actualizadoEn: new Date(),
+      }).where(eq(productosTable.codigo, item.codigo));
+    }
   }
 
   return res.status(201).json({ id: venta.id, total: totalVenta, ganancia: totalGanancia, origen: "camioneta" });
 });
 
 router.post("/caducado", async (req, res) => {
-  const s = req.session as any;
-  const { productoCodigo, cantidad, origen } = req.body as { productoCodigo: string; cantidad: number; origen: "panaderia" | "camioneta" };
+  const { productoCodigo, cantidad, origen, vendedor } = req.body as {
+    productoCodigo: string; cantidad: number; origen: "panaderia" | "camioneta"; vendedor?: string
+  };
   if (!productoCodigo || !cantidad || cantidad <= 0)
     return res.status(400).json({ error: "Datos inválidos" });
 
   const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, productoCodigo));
   if (!producto) return res.status(404).json({ error: "Producto no encontrado" });
 
-  const stockDisponible = origen === "camioneta" ? producto.stockCamioneta : producto.stock;
+  const v = vendedor?.toLowerCase();
+  let stockDisponible = producto.stock;
+  if (origen === "camioneta") {
+    stockDisponible = validarVendedor(v) ? (v === "michel" ? producto.stockCamionetaMichel : producto.stockCamionetaDavid) : producto.stockCamioneta;
+  }
+
   if (stockDisponible < cantidad)
     return res.status(400).json({ error: `Stock insuficiente. Disponible: ${stockDisponible}` });
 
@@ -161,14 +183,20 @@ router.post("/caducado", async (req, res) => {
     costoTotal: String(costoTotal),
     motivo: "caducado",
     origen: origen || "panaderia",
-    registradoPor: s?.nombre || "Sistema",
+    registradoPor: vendedor || "Sistema",
   });
 
-  const updateField = origen === "camioneta"
-    ? { stockCamioneta: sql`${productosTable.stockCamioneta} - ${cantidad}`, actualizadoEn: new Date() }
-    : { stock: sql`${productosTable.stock} - ${cantidad}`, actualizadoEn: new Date() };
-
-  await db.update(productosTable).set(updateField).where(eq(productosTable.codigo, productoCodigo));
+  if (origen === "camioneta" && validarVendedor(v)) {
+    if (v === "michel") {
+      await db.update(productosTable).set({ stockCamionetaMichel: sql`${productosTable.stockCamionetaMichel} - ${cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, productoCodigo));
+    } else {
+      await db.update(productosTable).set({ stockCamionetaDavid: sql`${productosTable.stockCamionetaDavid} - ${cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, productoCodigo));
+    }
+  } else if (origen === "camioneta") {
+    await db.update(productosTable).set({ stockCamioneta: sql`${productosTable.stockCamioneta} - ${cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, productoCodigo));
+  } else {
+    await db.update(productosTable).set({ stock: sql`${productosTable.stock} - ${cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, productoCodigo));
+  }
 
   return res.json({ mensaje: "Pérdida registrada", costoTotal });
 });

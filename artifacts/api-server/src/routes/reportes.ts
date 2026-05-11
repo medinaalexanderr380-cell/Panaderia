@@ -6,13 +6,20 @@ import { ObtenerResumenQueryParams, ObtenerVentasPorDiaQueryParams } from "@work
 
 const router = Router();
 
+function inicioMesActual(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+}
+
 router.get("/resumen", async (req, res) => {
   const parsed = ObtenerResumenQueryParams.safeParse(req.query);
   const conditions: SQL[] = [];
 
-  if (parsed.success) {
+  if (parsed.success && (parsed.data.fechaDesde || parsed.data.fechaHasta)) {
     if (parsed.data.fechaDesde) conditions.push(gte(ventasTable.fecha, new Date(parsed.data.fechaDesde)));
     if (parsed.data.fechaHasta) conditions.push(lte(ventasTable.fecha, new Date(parsed.data.fechaHasta)));
+  } else {
+    conditions.push(gte(ventasTable.fecha, inicioMesActual()));
   }
 
   const ventasResult = await db
@@ -22,14 +29,15 @@ router.get("/resumen", async (req, res) => {
       cantidadVentas: sql<number>`count(*)`,
     })
     .from(ventasTable)
-    .where(conditions.length > 0 ? and(...conditions) : undefined);
+    .where(and(...conditions));
 
   const comprasResult = await db
     .select({
       totalInvertido: sql<number>`coalesce(sum(${comprasTable.totalInvertido}::numeric), 0)`,
       cantidadCompras: sql<number>`count(*)`,
     })
-    .from(comprasTable);
+    .from(comprasTable)
+    .where(gte(comprasTable.fecha, inicioMesActual()));
 
   const totalVentas = Number(ventasResult[0]?.totalVentas ?? 0);
   const gananciaTotal = Number(ventasResult[0]?.gananciaTotal ?? 0);

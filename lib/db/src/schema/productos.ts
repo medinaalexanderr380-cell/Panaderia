@@ -12,6 +12,8 @@ export const productosTable = pgTable("productos", {
   precioCosto: numeric("precio_costo", { precision: 10, scale: 2 }).notNull(),
   stock: integer("stock").notNull().default(0),
   stockCamioneta: integer("stock_camioneta").notNull().default(0),
+  stockCamionetaMichel: integer("stock_camioneta_michel").notNull().default(0),
+  stockCamionetaDavid: integer("stock_camioneta_david").notNull().default(0),
   stockMinimo: integer("stock_minimo").notNull().default(5),
   unidad: text("unidad").notNull().default("unidad"),
   proveedorId: integer("proveedor_id").references(() => proveedoresTable.id),
