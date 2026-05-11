@@ -394,7 +394,7 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
 }
 
 // ─── Pestaña: Venta en Ruta ───────────────────────────────────────────────────
-function TabVentaRuta({ vendedor, stock }: { vendedor: Vendedor; stock: StockItem[] | undefined }) {
+function TabVentaRuta({ vendedor, stock, onCaducado }: { vendedor: Vendedor; stock: StockItem[] | undefined; onCaducado: (item: StockItem) => void }) {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -458,12 +458,17 @@ function TabVentaRuta({ vendedor, stock }: { vendedor: Vendedor; stock: StockIte
               {stockFiltrado.length === 0 ? (
                 <p className="text-center py-6 text-muted-foreground text-sm">No se encontraron productos</p>
               ) : stockFiltrado.map(item => (
-                <div key={item.codigo} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 cursor-pointer" onClick={() => addToCart(item)}>
-                  <div>
+                <div key={item.codigo} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30">
+                  <div className="flex-1 cursor-pointer" onClick={() => addToCart(item)}>
                     <p className="font-medium text-sm">{item.nombre}</p>
                     <p className="text-xs text-muted-foreground">Disponible: {item.stockCamioneta} · {fmt(item.precioVenta)}</p>
                   </div>
-                  <Button variant="ghost" size="sm" className="text-primary"><Plus className="w-4 h-4" /></Button>
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="sm" className="text-amber-600 border-amber-300 hover:bg-amber-50 text-xs" onClick={(e) => { e.stopPropagation(); onCaducado(item); }}>
+                      <AlertTriangle className="w-3.5 h-3.5 mr-1" /> Caducado
+                    </Button>
+                    <Button variant="ghost" size="sm" className="text-primary" onClick={() => addToCart(item)}><Plus className="w-4 h-4" /></Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -630,7 +635,7 @@ export default function Camioneta() {
         />
       )}
       {tab === "cargar" && <TabCargar vendedor={vendedorSeleccionado} />}
-      {tab === "venta" && <TabVentaRuta vendedor={vendedorSeleccionado} stock={stock} />}
+      {tab === "venta" && <TabVentaRuta vendedor={vendedorSeleccionado} stock={stock} onCaducado={(item) => { setCaducadoDialog(item); setCaducadoCantidad(1); }} />}
 
       {/* Diálogo caducado */}
       <AlertDialog open={!!caducadoDialog} onOpenChange={open => { if (!open) { setCaducadoDialog(null); setCaducadoCantidad(1); } }}>
