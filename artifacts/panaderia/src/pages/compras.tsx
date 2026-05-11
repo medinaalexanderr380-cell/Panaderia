@@ -41,7 +41,6 @@ export default function Compras() {
 
   const [proveedorInput, setProveedorInput] = useState("");
   const [items, setItems] = useState<CompraItem[]>([]);
-  const [codigoInput, setCodigoInput] = useState("");
   const [nombreInput, setNombreInput] = useState("");
   const [cantidadInput, setCantidadInput] = useState<number | "">(1);
   const [costoInput, setCostoInput] = useState<number | "">(0);
@@ -70,22 +69,26 @@ export default function Compras() {
 
   const totalCompra = items.reduce((sum, i) => sum + i.subtotal, 0);
 
+  const generarCodigo = (nombre: string) => {
+    const base = nombre.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 16);
+    return base || "PROD" + Date.now();
+  };
+
   const handleAddItem = (e: React.FormEvent) => {
     e.preventDefault();
     const cantidad = Number(cantidadInput);
     const costo = Number(costoInput);
-    if (!codigoInput.trim() || !nombreInput.trim() || !cantidad || cantidad <= 0 || costo < 0) {
+    if (!nombreInput.trim() || !cantidad || cantidad <= 0 || costo < 0) {
       toast({ title: "Datos inválidos", description: "Completa todos los campos correctamente.", variant: "destructive" });
       return;
     }
     setItems([...items, {
-      productoCodigo: codigoInput.trim().toUpperCase(),
+      productoCodigo: generarCodigo(nombreInput),
       productoNombre: nombreInput.trim(),
       cantidad,
       precioCosto: costo,
       subtotal: cantidad * costo
     }]);
-    setCodigoInput("");
     setNombreInput("");
     setCantidadInput(1);
     setCostoInput(0);
@@ -216,11 +219,7 @@ export default function Compras() {
             <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-4">
               <h3 className="font-medium text-sm">Agregar Producto</h3>
               <form onSubmit={handleAddItem} className="flex flex-wrap items-end gap-3">
-                <div className="flex-1 min-w-[110px]">
-                  <label className="text-xs text-muted-foreground mb-1 block">Código</label>
-                  <Input value={codigoInput} onChange={e => setCodigoInput(e.target.value)} placeholder="PAN001" required />
-                </div>
-                <div className="flex-[2] min-w-[140px]">
+                <div className="flex-[2] min-w-[160px]">
                   <label className="text-xs text-muted-foreground mb-1 block">Nombre del producto</label>
                   <Input value={nombreInput} onChange={e => setNombreInput(e.target.value)} placeholder="Pan de sal..." required />
                 </div>
@@ -241,7 +240,6 @@ export default function Compras() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Código</TableHead>
                   <TableHead>Producto</TableHead>
                   <TableHead className="text-right">Costo Unit.</TableHead>
                   <TableHead className="text-center">Cant.</TableHead>
@@ -252,14 +250,13 @@ export default function Compras() {
               <TableBody>
                 {items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
                       <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
                       Sin productos agregados
                     </TableCell>
                   </TableRow>
                 ) : items.map((item, idx) => (
                   <TableRow key={idx}>
-                    <TableCell className="font-mono text-xs">{item.productoCodigo}</TableCell>
                     <TableCell>{item.productoNombre}</TableCell>
                     <TableCell className="text-right">{formatCurrency(item.precioCosto)}</TableCell>
                     <TableCell className="text-center">{item.cantidad}</TableCell>
@@ -398,7 +395,6 @@ export default function Compras() {
                             <Table>
                               <TableHeader>
                                 <TableRow className="hover:bg-transparent">
-                                  <TableHead className="py-2 text-xs">Código</TableHead>
                                   <TableHead className="py-2 text-xs">Producto</TableHead>
                                   <TableHead className="py-2 text-xs text-right">Costo Unit.</TableHead>
                                   <TableHead className="py-2 text-xs text-center">Cant.</TableHead>
@@ -408,7 +404,6 @@ export default function Compras() {
                               <TableBody>
                                 {compra.items.map((item: any, idx: number) => (
                                   <TableRow key={idx} className="hover:bg-transparent">
-                                    <TableCell className="py-2 font-mono text-xs text-muted-foreground">{item.productoCodigo}</TableCell>
                                     <TableCell className="py-2 text-sm">{item.productoNombre}</TableCell>
                                     <TableCell className="py-2 text-sm text-right">{formatCurrency(item.precioCosto)}</TableCell>
                                     <TableCell className="py-2 text-sm text-center">{item.cantidad}</TableCell>
