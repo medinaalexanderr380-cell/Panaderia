@@ -43,8 +43,8 @@ export default function Compras() {
   const [items, setItems] = useState<CompraItem[]>([]);
   const [codigoInput, setCodigoInput] = useState("");
   const [nombreInput, setNombreInput] = useState("");
-  const [cantidadInput, setCantidadInput] = useState(1);
-  const [costoInput, setCostoInput] = useState(0);
+  const [cantidadInput, setCantidadInput] = useState<number | "">(1);
+  const [costoInput, setCostoInput] = useState<number | "">(0);
   const [expandedDias, setExpandedDias] = useState<Set<string>>(new Set());
   const [expandedCompras, setExpandedCompras] = useState<Set<number>>(new Set());
   const [filtroProveedor, setFiltroProveedor] = useState("");
@@ -72,16 +72,18 @@ export default function Compras() {
 
   const handleAddItem = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!codigoInput.trim() || !nombreInput.trim() || cantidadInput <= 0 || costoInput < 0) {
+    const cantidad = Number(cantidadInput);
+    const costo = Number(costoInput);
+    if (!codigoInput.trim() || !nombreInput.trim() || !cantidad || cantidad <= 0 || costo < 0) {
       toast({ title: "Datos inválidos", description: "Completa todos los campos correctamente.", variant: "destructive" });
       return;
     }
     setItems([...items, {
       productoCodigo: codigoInput.trim().toUpperCase(),
       productoNombre: nombreInput.trim(),
-      cantidad: cantidadInput,
-      precioCosto: costoInput,
-      subtotal: cantidadInput * costoInput
+      cantidad,
+      precioCosto: costo,
+      subtotal: cantidad * costo
     }]);
     setCodigoInput("");
     setNombreInput("");
@@ -224,11 +226,11 @@ export default function Compras() {
                 </div>
                 <div className="w-28">
                   <label className="text-xs text-muted-foreground mb-1 block">Costo unitario $</label>
-                  <Input type="number" step="0.01" min="0" value={costoInput} onChange={e => setCostoInput(Number(e.target.value))} required />
+                  <Input type="number" step="0.01" min="0" value={costoInput} onChange={e => setCostoInput(e.target.value === "" ? "" : Number(e.target.value))} required />
                 </div>
                 <div className="w-20">
                   <label className="text-xs text-muted-foreground mb-1 block">Cantidad</label>
-                  <Input type="number" min="1" value={cantidadInput} onChange={e => setCantidadInput(Number(e.target.value))} required />
+                  <Input type="number" min="1" value={cantidadInput} onChange={e => setCantidadInput(e.target.value === "" ? "" : Number(e.target.value))} required />
                 </div>
                 <Button type="submit" variant="secondary" className="shrink-0 gap-1">
                   <Plus className="w-4 h-4" /> Agregar

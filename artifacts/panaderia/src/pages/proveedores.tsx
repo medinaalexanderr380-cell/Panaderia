@@ -26,7 +26,7 @@ const proveedorSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido"),
   contacto: z.string().optional(),
   telefono: z.string().optional(),
-  email: z.string().email("Email inválido").optional().or(z.literal("")),
+  email: z.string().optional().default(""),
   direccion: z.string().optional(),
   notas: z.string().optional(),
 });
