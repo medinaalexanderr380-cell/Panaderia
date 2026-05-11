@@ -35,7 +35,7 @@ const productoSchema = z.object({
   descripcion: z.string().optional().default(""),
   precioVenta: z.coerce.number().min(0, "Debe ser mayor o igual a 0"),
   precioCosto: z.coerce.number().min(0, "Debe ser mayor o igual a 0"),
-  stock: z.coerce.number().min(0).default(0),
+  stock: z.coerce.number().min(0, "Debe ser mayor o igual a 0"),
   stockMinimo: z.coerce.number().min(0, "Debe ser mayor o igual a 0"),
   unidad: z.string().default("unidades"),
   proveedorId: z.coerce.number({ invalid_type_error: "El proveedor es requerido" }).min(1, "Seleccioná un proveedor")
