@@ -35,10 +35,10 @@ const productoSchema = z.object({
   descripcion: z.string().optional().default(""),
   precioVenta: z.coerce.number().min(0, "Debe ser mayor o igual a 0"),
   precioCosto: z.coerce.number().min(0, "Debe ser mayor o igual a 0"),
-  stock: z.coerce.number().min(0, "Debe ser mayor o igual a 0"),
+  stock: z.coerce.number().min(0).default(0),
   stockMinimo: z.coerce.number().min(0, "Debe ser mayor o igual a 0"),
-  unidad: z.string().min(1, "La unidad es requerida"),
-  proveedorId: z.coerce.number().optional().nullable()
+  unidad: z.string().default("unidades"),
+  proveedorId: z.coerce.number({ invalid_type_error: "El proveedor es requerido" }).min(1, "Seleccioná un proveedor")
 });
 
 type ProductoFormValues = z.infer<typeof productoSchema>;
@@ -67,7 +67,7 @@ export default function Productos() {
       stock: 0,
       stockMinimo: 0,
       unidad: "unidades",
-      proveedorId: null
+      proveedorId: undefined
     }
   });
 
@@ -138,9 +138,9 @@ export default function Productos() {
 
   const onSubmit = (data: ProductoFormValues) => {
     if (editingProducto) {
-      actualizarMutation.mutate({ codigo: editingProducto.codigo, data: { ...data, proveedorId: data.proveedorId || undefined } });
+      actualizarMutation.mutate({ codigo: editingProducto.codigo, data: { ...data, proveedorId: data.proveedorId } });
     } else {
-      crearMutation.mutate({ data: { ...data, codigo: generarCodigo(data.nombre), proveedorId: data.proveedorId || undefined } });
+      crearMutation.mutate({ data: { ...data, codigo: generarCodigo(data.nombre), proveedorId: data.proveedorId } });
     }
   };
 
@@ -154,7 +154,7 @@ export default function Productos() {
       stock: Number(producto.stock),
       stockMinimo: producto.stockMinimo,
       unidad: producto.unidad,
-      proveedorId: producto.proveedorId || null
+      proveedorId: producto.proveedorId || undefined
     });
     setIsDialogOpen(true);
   };
@@ -235,19 +235,6 @@ export default function Productos() {
                     </FormItem>
                   )}
                 />
-                {!editingProducto && (
-                  <FormField
-                    control={form.control}
-                    name="stock"
-                    render={({ field }) => (
-                      <FormItem className="col-span-1">
-                        <FormLabel>Stock inicial</FormLabel>
-                        <FormControl><Input type="number" min="0" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
                 <FormField
                   control={form.control}
                   name="stockMinimo"
@@ -261,44 +248,20 @@ export default function Productos() {
                 />
                 <FormField
                   control={form.control}
-                  name="unidad"
-                  render={({ field }) => (
-                    <FormItem className="col-span-1">
-                      <FormLabel>Unidad</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecciona..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="unidades">Unidades</SelectItem>
-                          <SelectItem value="kg">Kilogramos (kg)</SelectItem>
-                          <SelectItem value="gr">Gramos (gr)</SelectItem>
-                          <SelectItem value="litros">Litros (l)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
                   name="proveedorId"
                   render={({ field }) => (
-                    <FormItem className="col-span-1">
-                      <FormLabel>Proveedor</FormLabel>
-                      <Select 
-                        onValueChange={(val) => field.onChange(val === "null" ? null : Number(val))} 
-                        value={field.value ? String(field.value) : "null"}
+                    <FormItem className="col-span-2">
+                      <FormLabel>Proveedor <span className="text-destructive">*</span></FormLabel>
+                      <Select
+                        onValueChange={(val) => field.onChange(Number(val))}
+                        value={field.value ? String(field.value) : ""}
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Sin proveedor" />
+                            <SelectValue placeholder="Seleccioná un proveedor..." />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="null">Sin proveedor</SelectItem>
                           {proveedores?.map(p => (
                             <SelectItem key={p.id} value={String(p.id)}>{p.nombre}</SelectItem>
                           ))}
