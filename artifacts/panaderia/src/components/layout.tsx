@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import {
-  Store, ShoppingCart, Package, Users, BarChart, Truck, ShieldCheck,
+  Store, ShoppingCart, Package, Users, BarChart, Truck, ShieldCheck, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +19,7 @@ export function Layout({ children }: LayoutProps) {
     { name: "Camioneta", href: "/camioneta", icon: Truck },
     { name: "Proveedores", href: "/proveedores", icon: Users },
     { name: "Reportes", href: "/reportes", icon: BarChart },
+    { name: "Pérdidas", href: "/perdidas", icon: AlertTriangle },
     { name: "Usuarios", href: "/usuarios", icon: ShieldCheck },
   ];
 
