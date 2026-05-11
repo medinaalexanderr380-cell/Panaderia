@@ -225,7 +225,6 @@ function TabStock({ vendedor, stock, isLoading, onCaducado }: { vendedor: Vended
 function TabCargar({ vendedor }: { vendedor: Vendedor }) {
   const { toast } = useToast();
   const [items, setItems] = useState<CargaItem[]>([]);
-  const [codigoInput, setCodigoInput] = useState("");
   const [nombreInput, setNombreInput] = useState("");
   const [proveedorInput, setProveedorInput] = useState("");
   const [cantidadInput, setCantidadInput] = useState<number | "">("");
@@ -241,14 +240,19 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
     setProveedorInput("");
   });
 
+  const generarCodigo = (nombre: string) => {
+    const base = nombre.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 16);
+    return base || "PROD" + Date.now();
+  };
+
   const handleAddItem = (e: React.FormEvent) => {
     e.preventDefault();
     const cantidad = Number(cantidadInput);
-    if (!codigoInput.trim() || !nombreInput.trim() || !cantidad || cantidad <= 0) {
-      toast({ title: "Completá todos los campos", variant: "destructive" });
+    if (!nombreInput.trim() || !cantidad || cantidad <= 0) {
+      toast({ title: "Completá el nombre y la cantidad", variant: "destructive" });
       return;
     }
-    const codigo = codigoInput.trim().toUpperCase();
+    const codigo = generarCodigo(nombreInput);
     const existing = items.find(i => i.productoCodigo === codigo);
     if (existing) {
       setItems(prev => prev.map(i => i.productoCodigo === codigo ? { ...i, cantidad: i.cantidad + cantidad } : i));
@@ -260,7 +264,6 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
         proveedor: proveedorInput.trim(),
       }]);
     }
-    setCodigoInput("");
     setNombreInput("");
     setCantidadInput("");
   };
@@ -289,11 +292,7 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
           <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-3">
             <h3 className="text-sm font-medium">Agregar producto</h3>
             <form onSubmit={handleAddItem} className="flex flex-wrap items-end gap-3">
-              <div className="w-28">
-                <label className="text-xs text-muted-foreground mb-1 block">Código</label>
-                <Input value={codigoInput} onChange={e => setCodigoInput(e.target.value)} placeholder="PAN001" required />
-              </div>
-              <div className="flex-1 min-w-[140px]">
+              <div className="flex-1 min-w-[160px]">
                 <label className="text-xs text-muted-foreground mb-1 block">Nombre del producto</label>
                 <Input value={nombreInput} onChange={e => setNombreInput(e.target.value)} placeholder="Pan de sal..." required />
               </div>
@@ -316,7 +315,6 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Código</TableHead>
                 <TableHead>Producto</TableHead>
                 <TableHead>Proveedor</TableHead>
                 <TableHead className="text-center">Cant.</TableHead>
@@ -326,14 +324,13 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
             <TableBody>
               {items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-sm">
+                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground text-sm">
                     <Truck className="w-8 h-8 mx-auto mb-2 opacity-20" />
                     Sin productos agregados
                   </TableCell>
                 </TableRow>
               ) : items.map((item, idx) => (
                 <TableRow key={idx}>
-                  <TableCell className="font-mono text-xs">{item.productoCodigo}</TableCell>
                   <TableCell className="font-medium text-sm">{item.productoNombre}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{item.proveedor || "—"}</TableCell>
                   <TableCell className="text-center font-bold">{item.cantidad}</TableCell>
