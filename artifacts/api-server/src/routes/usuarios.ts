@@ -8,12 +8,7 @@ import { requireAuth } from "../middleware/auth";
 const router = Router();
 router.use(requireAuth);
 
-function requireAdmin(req: any, res: any, next: any) {
-  if ((req.session as any)?.rol !== "admin") return res.status(403).json({ error: "Solo el administrador puede realizar esta acción" });
-  next();
-}
-
-router.get("/", requireAdmin, async (req, res) => {
+router.get("/", async (req, res) => {
   const usuarios = await db
     .select({
       id: usuariosTable.id,
@@ -28,7 +23,7 @@ router.get("/", requireAdmin, async (req, res) => {
   return res.json(usuarios);
 });
 
-router.post("/", requireAdmin, async (req, res) => {
+router.post("/", async (req, res) => {
   const { username, nombre, password, rol } = req.body;
   if (!username || !nombre || !password) return res.status(400).json({ error: "Usuario, nombre y contraseña son requeridos" });
 
@@ -47,7 +42,7 @@ router.post("/", requireAdmin, async (req, res) => {
   return res.status(201).json(nuevo);
 });
 
-router.put("/:id", requireAdmin, async (req, res) => {
+router.put("/:id", async (req, res) => {
   const id = Number(req.params["id"]);
   const { nombre, rol, activo } = req.body;
   if (!nombre) return res.status(400).json({ error: "El nombre es requerido" });
@@ -61,7 +56,7 @@ router.put("/:id", requireAdmin, async (req, res) => {
   return res.json(updated);
 });
 
-router.put("/:id/password", requireAdmin, async (req, res) => {
+router.put("/:id/password", async (req, res) => {
   const id = Number(req.params["id"]);
   const { password } = req.body;
   if (!password || password.length < 6) return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres" });
@@ -76,10 +71,8 @@ router.put("/:id/password", requireAdmin, async (req, res) => {
   return res.json({ mensaje: "Contraseña actualizada" });
 });
 
-router.delete("/:id", requireAdmin, async (req, res) => {
+router.delete("/:id", async (req, res) => {
   const id = Number(req.params["id"]);
-  const sessionId = (req.session as any)?.userId;
-  if (id === sessionId) return res.status(400).json({ error: "No podés desactivar tu propio usuario" });
 
   const [updated] = await db.update(usuariosTable)
     .set({ activo: false })
