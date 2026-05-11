@@ -5,7 +5,8 @@ import {
   useCrearProducto,
   useActualizarProducto,
   useEliminarProducto,
-  useListarProveedores
+  useListarProveedores,
+  useRegistrarCompra,
 } from "@workspace/api-client-react";
 import { 
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
@@ -46,6 +47,10 @@ export default function Productos() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProducto, setEditingProducto] = useState<any>(null);
+  const [comprandoProducto, setComprandoProducto] = useState<any>(null);
+  const [compraProveedor, setCompraProveedor] = useState("");
+  const [compraCantidad, setCompraCantidad] = useState<number | "">(1);
+  const [compraCosto, setCompraCosto] = useState<number | "">(0);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -100,6 +105,36 @@ export default function Productos() {
       onError: () => toast({ title: "Error al eliminar producto", variant: "destructive" })
     }
   });
+
+  const compraMutation = useRegistrarCompra({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListarProductosQueryKey() });
+        toast({ title: "Compra registrada", description: `Stock de ${comprandoProducto?.nombre} actualizado.` });
+        setComprandoProducto(null);
+        setCompraProveedor("");
+        setCompraCantidad(1);
+        setCompraCosto(0);
+      },
+      onError: (err: any) => toast({ title: "Error al registrar compra", description: err?.response?.data?.error, variant: "destructive" })
+    }
+  });
+
+  const handleComprar = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cantidad = Number(compraCantidad);
+    const costo = Number(compraCosto);
+    if (!compraProveedor.trim() || !cantidad || cantidad <= 0) {
+      toast({ title: "Completá proveedor y cantidad", variant: "destructive" });
+      return;
+    }
+    compraMutation.mutate({
+      data: {
+        proveedor: compraProveedor.trim(),
+        items: [{ productoCodigo: comprandoProducto.codigo, cantidad, precioCosto: costo }]
+      }
+    });
+  };
 
   const onSubmit = (data: ProductoFormValues) => {
     if (editingProducto) {
@@ -343,6 +378,19 @@ export default function Productos() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <Button
+                        variant="ghost" size="icon"
+                        className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                        title="Registrar compra"
+                        onClick={() => {
+                          setComprandoProducto(producto);
+                          setCompraProveedor(producto.proveedorNombre || "");
+                          setCompraCantidad(1);
+                          setCompraCosto(Number(producto.precioCosto));
+                        }}
+                      >
+                        <ShoppingCart className="h-4 w-4" />
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(producto)}>
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -378,6 +426,61 @@ export default function Productos() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Diálogo compra rápida */}
+      <Dialog open={!!comprandoProducto} onOpenChange={open => { if (!open) setComprandoProducto(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingCart className="w-5 h-5 text-emerald-600" />
+              Registrar compra
+            </DialogTitle>
+          </DialogHeader>
+          {comprandoProducto && (
+            <form onSubmit={handleComprar} className="space-y-4 pt-2">
+              <p className="text-sm font-medium text-muted-foreground">
+                Producto: <span className="text-foreground">{comprandoProducto.nombre}</span>
+              </p>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Proveedor</label>
+                <Input
+                  list="proveedores-compra-list"
+                  value={compraProveedor}
+                  onChange={e => setCompraProveedor(e.target.value)}
+                  placeholder="Nombre del proveedor..."
+                  required
+                />
+                <datalist id="proveedores-compra-list">
+                  {proveedores?.map(p => <option key={p.id} value={p.nombre} />)}
+                </datalist>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Cantidad comprada</label>
+                <Input
+                  type="number" min="1"
+                  value={compraCantidad}
+                  onChange={e => setCompraCantidad(e.target.value === "" ? "" : Number(e.target.value))}
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Costo unitario $</label>
+                <Input
+                  type="number" min="0" step="0.01"
+                  value={compraCosto}
+                  onChange={e => setCompraCosto(e.target.value === "" ? "" : Number(e.target.value))}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setComprandoProducto(null)}>Cancelar</Button>
+                <Button type="submit" disabled={compraMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700">
+                  {compraMutation.isPending ? "Guardando..." : "Confirmar compra"}
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
