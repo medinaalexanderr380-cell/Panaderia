@@ -59,13 +59,18 @@ router.post("/cargar", async (req, res) => {
 
     let updated;
     if (producto) {
+      if (producto.stock < item.cantidad)
+        return res.status(400).json({ error: `Stock insuficiente para "${producto.nombre}". Disponible: ${producto.stock}` });
+
       if (v === "michel") {
         [updated] = await db.update(productosTable).set({
+          stock: sql`${productosTable.stock} - ${item.cantidad}`,
           stockCamionetaMichel: sql`${productosTable.stockCamionetaMichel} + ${item.cantidad}`,
           actualizadoEn: new Date(),
         }).where(eq(productosTable.codigo, codigo)).returning();
       } else {
         [updated] = await db.update(productosTable).set({
+          stock: sql`${productosTable.stock} - ${item.cantidad}`,
           stockCamionetaDavid: sql`${productosTable.stockCamionetaDavid} + ${item.cantidad}`,
           actualizadoEn: new Date(),
         }).where(eq(productosTable.codigo, codigo)).returning();
@@ -168,7 +173,7 @@ router.post("/caducado", async (req, res) => {
   const v = vendedor?.toLowerCase();
   let stockDisponible = producto.stock;
   if (origen === "camioneta") {
-    stockDisponible = validarVendedor(v) ? (v === "michel" ? producto.stockCamionetaMichel : producto.stockCamionetaDavid) : producto.stockCamioneta;
+    stockDisponible = validarVendedor(v) ? (v === "michel" ? producto.stockCamionetaMichel : producto.stockCamionetaDavid) : 0;
   }
 
   if (stockDisponible < cantidad)
@@ -192,8 +197,6 @@ router.post("/caducado", async (req, res) => {
     } else {
       await db.update(productosTable).set({ stockCamionetaDavid: sql`${productosTable.stockCamionetaDavid} - ${cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, productoCodigo));
     }
-  } else if (origen === "camioneta") {
-    await db.update(productosTable).set({ stockCamioneta: sql`${productosTable.stockCamioneta} - ${cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, productoCodigo));
   } else {
     await db.update(productosTable).set({ stock: sql`${productosTable.stock} - ${cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, productoCodigo));
   }
