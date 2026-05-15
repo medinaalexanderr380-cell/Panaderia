@@ -485,6 +485,7 @@ function TabVentaRuta({ vendedor, stock, onCaducado }: { vendedor: Vendedor; sto
                 <div key={item.codigo} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 cursor-pointer" onClick={() => addToCart(item)}>
                   <div>
                     <p className="font-medium text-sm">{item.nombre}</p>
+                    {item.descripcion && <p className="text-xs text-muted-foreground">{item.descripcion}</p>}
                     <p className="text-xs text-muted-foreground">Disponible: {item.stockCamioneta} · {fmt(item.precioVenta)}</p>
                   </div>
                   <div className="flex items-center gap-1">
