@@ -15,8 +15,10 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, Plus, Key, UserX, Edit2, ShieldCheck, User } from "lucide-react";
+import { Users, Plus, Key, UserX, Edit2, ShieldCheck, User, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+const ADMIN_PASSWORD = "04052005";
 
 interface Usuario {
   id: number;
@@ -38,10 +40,57 @@ const apiFetch = (url: string, opts: RequestInit) =>
   fetch(url, { ...opts, credentials: "include", headers: { "Content-Type": "application/json", ...(opts.headers || {}) } })
     .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error); return d; });
 
+function PantallaContrasena({ onAcceso }: { onAcceso: () => void }) {
+  const [pass, setPass] = useState("");
+  const [error, setError] = useState(false);
+  const { toast } = useToast();
+
+  const verificar = () => {
+    if (pass === ADMIN_PASSWORD) {
+      onAcceso();
+    } else {
+      setError(true);
+      setPass("");
+      toast({ title: "Contraseña incorrecta", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="text-center pb-2">
+          <div className="mx-auto w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mb-3">
+            <Lock className="w-7 h-7 text-primary" />
+          </div>
+          <CardTitle className="text-xl">Acceso restringido</CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">Ingresá la contraseña de administrador para continuar</p>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-4">
+          <Input
+            type="password"
+            placeholder="Contraseña"
+            value={pass}
+            onChange={e => { setPass(e.target.value); setError(false); }}
+            onKeyDown={e => e.key === "Enter" && verificar()}
+            className={error ? "border-destructive focus-visible:ring-destructive" : ""}
+            autoFocus
+          />
+          {error && <p className="text-destructive text-sm text-center">Contraseña incorrecta</p>}
+          <Button className="w-full" onClick={verificar} disabled={!pass}>
+            Ingresar
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function Usuarios() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: usuarios, isLoading } = useUsuarios();
+
+  const [acceso, setAcceso] = useState(false);
 
   const [dialogNuevo, setDialogNuevo] = useState(false);
   const [dialogEditar, setDialogEditar] = useState<Usuario | null>(null);
@@ -77,15 +126,24 @@ export default function Usuarios() {
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
 
+  if (!acceso) {
+    return <PantallaContrasena onAcceso={() => setAcceso(true)} />;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
           <Users className="w-8 h-8 text-primary" /> Gestión de Usuarios
         </h1>
-        <Button onClick={() => { setForm({ username: "", nombre: "", password: "", rol: "vendedor" }); setDialogNuevo(true); }}>
-          <Plus className="w-4 h-4 mr-2" /> Nuevo Usuario
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setAcceso(false)} className="text-xs gap-1 text-muted-foreground">
+            <Lock className="w-3.5 h-3.5" /> Bloquear
+          </Button>
+          <Button onClick={() => { setForm({ username: "", nombre: "", password: "", rol: "vendedor" }); setDialogNuevo(true); }}>
+            <Plus className="w-4 h-4 mr-2" /> Nuevo Usuario
+          </Button>
+        </div>
       </div>
 
       <Card>
