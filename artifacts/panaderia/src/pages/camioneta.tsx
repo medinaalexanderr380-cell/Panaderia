@@ -315,7 +315,9 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
                 </datalist>
                 {productoPreview && (
                   <div className="mt-1.5 p-2 bg-primary/5 border border-primary/20 rounded text-xs space-y-0.5">
-                    {productoPreview.descripcion && <p className="text-muted-foreground">{productoPreview.descripcion}</p>}
+                    <p className="text-muted-foreground italic">
+                      {productoPreview.descripcion || "Sin descripción"}
+                    </p>
                     <p>Depósito: <strong className={productoPreview.stock === 0 ? "text-destructive" : "text-foreground"}>{productoPreview.stock} unidades</strong></p>
                   </div>
                 )}
