@@ -234,15 +234,22 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
 
   const nombre = VENDEDORES.find(v => v.username === vendedor)?.nombre;
 
+  const { data: todosProductos } = useQuery<{ codigo: string; nombre: string }[]>({
+    queryKey: ["productos-lista"],
+    queryFn: () => fetch("/api/productos", { credentials: "include" }).then(r => r.json()),
+  });
+
   const cargaMutation = useCargaMutation(vendedor, () => {
     toast({ title: `¡Camioneta de ${nombre} cargada exitosamente!` });
     setItems([]);
     setProveedorInput("");
   });
 
-  const generarCodigo = (nombre: string) => {
-    const base = nombre.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 16);
-    return base || "PROD" + Date.now();
+  const resolverCodigo = (nombreBuscado: string) => {
+    const match = todosProductos?.find(p => p.nombre.toLowerCase() === nombreBuscado.trim().toLowerCase());
+    if (match) return { codigo: match.codigo, nombre: match.nombre };
+    const base = nombreBuscado.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 16);
+    return { codigo: base || "PROD" + Date.now(), nombre: nombreBuscado.trim() };
   };
 
   const handleAddItem = (e: React.FormEvent) => {
@@ -252,14 +259,14 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
       toast({ title: "Completá el nombre y la cantidad", variant: "destructive" });
       return;
     }
-    const codigo = generarCodigo(nombreInput);
+    const { codigo, nombre: nombreResuelto } = resolverCodigo(nombreInput);
     const existing = items.find(i => i.productoCodigo === codigo);
     if (existing) {
       setItems(prev => prev.map(i => i.productoCodigo === codigo ? { ...i, cantidad: i.cantidad + cantidad } : i));
     } else {
       setItems(prev => [...prev, {
         productoCodigo: codigo,
-        productoNombre: nombreInput.trim(),
+        productoNombre: nombreResuelto,
         cantidad,
         proveedor: proveedorInput.trim(),
       }]);
@@ -294,7 +301,16 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
             <form onSubmit={handleAddItem} className="flex flex-wrap items-end gap-3">
               <div className="flex-1 min-w-[160px]">
                 <label className="text-xs text-muted-foreground mb-1 block">Nombre del producto</label>
-                <Input value={nombreInput} onChange={e => setNombreInput(e.target.value)} placeholder="Pan de sal..." required />
+                <Input
+                  value={nombreInput}
+                  onChange={e => setNombreInput(e.target.value)}
+                  placeholder="Pan de sal..."
+                  list="productos-cargar-list"
+                  required
+                />
+                <datalist id="productos-cargar-list">
+                  {todosProductos?.map(p => <option key={p.codigo} value={p.nombre} />)}
+                </datalist>
               </div>
               <div className="w-24">
                 <label className="text-xs text-muted-foreground mb-1 block">Cantidad</label>
@@ -458,8 +474,8 @@ function TabVentaRuta({ vendedor, stock, onCaducado }: { vendedor: Vendedor; sto
               {stockFiltrado.length === 0 ? (
                 <p className="text-center py-6 text-muted-foreground text-sm">No se encontraron productos</p>
               ) : stockFiltrado.map(item => (
-                <div key={item.codigo} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30">
-                  <div className="flex-1 cursor-pointer" onClick={() => addToCart(item)}>
+                <div key={item.codigo} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 cursor-pointer" onClick={() => addToCart(item)}>
+                  <div>
                     <p className="font-medium text-sm">{item.nombre}</p>
                     <p className="text-xs text-muted-foreground">Disponible: {item.stockCamioneta} · {fmt(item.precioVenta)}</p>
                   </div>
@@ -467,7 +483,7 @@ function TabVentaRuta({ vendedor, stock, onCaducado }: { vendedor: Vendedor; sto
                     <Button variant="outline" size="sm" className="text-amber-600 border-amber-300 hover:bg-amber-50 text-xs" onClick={(e) => { e.stopPropagation(); onCaducado(item); }}>
                       <AlertTriangle className="w-3.5 h-3.5 mr-1" /> Caducado
                     </Button>
-                    <Button variant="ghost" size="sm" className="text-primary" onClick={() => addToCart(item)}><Plus className="w-4 h-4" /></Button>
+                    <Button variant="ghost" size="sm" className="text-primary" onClick={(e) => { e.stopPropagation(); addToCart(item); }}><Plus className="w-4 h-4" /></Button>
                   </div>
                 </div>
               ))}
@@ -494,7 +510,7 @@ function TabVentaRuta({ vendedor, stock, onCaducado }: { vendedor: Vendedor; sto
                     onClick={() => setCart(c => c.map(i => i.productoCodigo === item.productoCodigo ? { ...i, cantidad: Math.max(0, i.cantidad - 1) } : i).filter(i => i.cantidad > 0))}>−</Button>
                   <span className="w-6 text-center text-sm font-bold">{item.cantidad}</span>
                   <Button variant="outline" size="icon" className="h-6 w-6"
-                    onClick={() => addToCart(stock?.find(s => s.codigo === item.productoCodigo)!)}>+</Button>
+                    onClick={() => { const s = stock?.find(s => s.codigo === item.productoCodigo); if (s) addToCart(s); }}>+</Button>
                 </div>
                 <span className="text-xs font-medium w-20 text-right">{fmt(item.cantidad * item.precioUnitario)}</span>
               </div>
