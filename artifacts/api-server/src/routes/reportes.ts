@@ -115,6 +115,87 @@ router.get("/vendedores", async (req, res) => {
   })));
 });
 
+router.get("/vendedores-detalle", async (req, res) => {
+  const hoyStr = new Date().toISOString().slice(0, 10);
+  const inicioDia = new Date(`${hoyStr}T00:00:00.000Z`);
+  const finDia = new Date(`${hoyStr}T23:59:59.999Z`);
+
+  const resumenGlobal = await db
+    .select({
+      vendedor: ventasTable.vendedor,
+      cantidadVentas: sql<number>`count(*)`,
+      totalVentas: sql<number>`sum(${ventasTable.total}::numeric)`,
+      gananciaGenerada: sql<number>`sum(${ventasTable.ganancia}::numeric)`,
+    })
+    .from(ventasTable)
+    .groupBy(ventasTable.vendedor);
+
+  const resumenHoy = await db
+    .select({
+      vendedor: ventasTable.vendedor,
+      cantidadVentasHoy: sql<number>`count(*)`,
+      totalHoy: sql<number>`sum(${ventasTable.total}::numeric)`,
+      gananciaHoy: sql<number>`sum(${ventasTable.ganancia}::numeric)`,
+    })
+    .from(ventasTable)
+    .where(and(gte(ventasTable.fecha, inicioDia), lte(ventasTable.fecha, finDia)))
+    .groupBy(ventasTable.vendedor);
+
+  const productosGlobal = await db
+    .select({
+      vendedor: ventasTable.vendedor,
+      productoNombre: itemsVentaTable.productoNombre,
+      cantidad: sql<number>`sum(${itemsVentaTable.cantidad})`,
+      ingresos: sql<number>`sum(${itemsVentaTable.subtotal}::numeric)`,
+      ganancia: sql<number>`sum((${itemsVentaTable.precioUnitario}::numeric - ${itemsVentaTable.precioCosto}::numeric) * ${itemsVentaTable.cantidad})`,
+    })
+    .from(itemsVentaTable)
+    .innerJoin(ventasTable, eq(itemsVentaTable.ventaId, ventasTable.id))
+    .groupBy(ventasTable.vendedor, itemsVentaTable.productoNombre)
+    .orderBy(desc(sql`sum(${itemsVentaTable.cantidad})`));
+
+  const productosHoy = await db
+    .select({
+      vendedor: ventasTable.vendedor,
+      productoNombre: itemsVentaTable.productoNombre,
+      cantidad: sql<number>`sum(${itemsVentaTable.cantidad})`,
+      ingresos: sql<number>`sum(${itemsVentaTable.subtotal}::numeric)`,
+      ganancia: sql<number>`sum((${itemsVentaTable.precioUnitario}::numeric - ${itemsVentaTable.precioCosto}::numeric) * ${itemsVentaTable.cantidad})`,
+    })
+    .from(itemsVentaTable)
+    .innerJoin(ventasTable, eq(itemsVentaTable.ventaId, ventasTable.id))
+    .where(and(gte(ventasTable.fecha, inicioDia), lte(ventasTable.fecha, finDia)))
+    .groupBy(ventasTable.vendedor, itemsVentaTable.productoNombre)
+    .orderBy(desc(sql`sum(${itemsVentaTable.cantidad})`));
+
+  const vendedores = [...new Set([...resumenGlobal.map(r => r.vendedor), ...resumenHoy.map(r => r.vendedor)])];
+
+  const respuesta = vendedores.map(v => {
+    const global = resumenGlobal.find(r => r.vendedor === v);
+    const hoy = resumenHoy.find(r => r.vendedor === v);
+    return {
+      vendedor: v,
+      cantidadVentas: Number(global?.cantidadVentas ?? 0),
+      totalVentas: Number(global?.totalVentas ?? 0),
+      gananciaGenerada: Number(global?.gananciaGenerada ?? 0),
+      hoy: {
+        cantidadVentas: Number(hoy?.cantidadVentasHoy ?? 0),
+        totalVentas: Number(hoy?.totalHoy ?? 0),
+        ganancia: Number(hoy?.gananciaHoy ?? 0),
+      },
+      topProductosGlobal: productosGlobal
+        .filter(p => p.vendedor === v)
+        .slice(0, 5)
+        .map(p => ({ nombre: p.productoNombre, cantidad: Number(p.cantidad), ingresos: Number(p.ingresos), ganancia: Number(p.ganancia) })),
+      productosHoy: productosHoy
+        .filter(p => p.vendedor === v)
+        .map(p => ({ nombre: p.productoNombre, cantidad: Number(p.cantidad), ingresos: Number(p.ingresos), ganancia: Number(p.ganancia) })),
+    };
+  });
+
+  return res.json(respuesta);
+});
+
 router.get("/stock-bajo", async (req, res) => {
   const productos = await db
     .select()

@@ -11,14 +11,32 @@ import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Cart
 import { formatCurrency } from "@/lib/format";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
-import { BarChart as BarChartIcon, TrendingUp, Users, PieChart } from "lucide-react";
+import { BarChart as BarChartIcon, TrendingUp, Users, ChevronDown, ChevronUp, CalendarDays, Package } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
+
+interface VendedorDetalle {
+  vendedor: string;
+  cantidadVentas: number;
+  totalVentas: number;
+  gananciaGenerada: number;
+  hoy: { cantidadVentas: number; totalVentas: number; ganancia: number };
+  topProductosGlobal: { nombre: string; cantidad: number; ingresos: number; ganancia: number }[];
+  productosHoy: { nombre: string; cantidad: number; ingresos: number; ganancia: number }[];
+}
 
 export default function Reportes() {
   const { data: ventasMes } = useObtenerVentasPorDia({ dias: 30 }, { query: { queryKey: getObtenerVentasPorDiaQueryKey({ dias: 30 }) } });
   const { data: topProductos } = useObtenerTopProductos();
   const { data: vendedores } = useObtenerReporteVendedores();
   const { data: resumen } = useObtenerResumen();
+  const { data: vendedoresDetalle } = useQuery<VendedorDetalle[]>({
+    queryKey: ["reportes", "vendedores-detalle"],
+    queryFn: () => fetch("/api/reportes/vendedores-detalle", { credentials: "include" }).then(r => r.json()),
+    refetchInterval: 30000,
+  });
+  const [expandido, setExpandido] = useState<string | null>(null);
 
   const chartColors = [
     "hsl(var(--chart-1))",
@@ -155,48 +173,113 @@ export default function Reportes() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="equipo" className="pt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Rendimiento del Equipo</CardTitle>
-              <CardDescription>Ventas y ganancias generadas por vendedor</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead>Vendedor</TableHead>
-                    <TableHead className="text-center">Operaciones</TableHead>
-                    <TableHead className="text-right">Total Facturado</TableHead>
-                    <TableHead className="text-right">Ganancia Generada</TableHead>
-                    <TableHead className="text-right">Ticket Promedio</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {vendedores?.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No hay datos de vendedores.</TableCell></TableRow>
-                  ) : (
-                    vendedores?.map((v, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
-                            {v.vendedor.substring(0, 2).toUpperCase()}
-                          </div>
-                          {v.vendedor}
-                        </TableCell>
-                        <TableCell className="text-center">{v.cantidadVentas}</TableCell>
-                        <TableCell className="text-right font-bold">{formatCurrency(v.totalVentas)}</TableCell>
-                        <TableCell className="text-right text-primary">{formatCurrency(v.gananciaGenerada)}</TableCell>
-                        <TableCell className="text-right text-muted-foreground">
-                          {formatCurrency(v.cantidadVentas > 0 ? v.totalVentas / v.cantidadVentas : 0)}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+        <TabsContent value="equipo" className="pt-6 space-y-4">
+          {!vendedoresDetalle?.length ? (
+            <Card><CardContent className="py-12 text-center text-muted-foreground">No hay datos de vendedores aún.</CardContent></Card>
+          ) : vendedoresDetalle.map(v => {
+            const abierto = expandido === v.vendedor;
+            const iniciales = v.vendedor.substring(0, 2).toUpperCase();
+            return (
+              <Card key={v.vendedor} className="overflow-hidden">
+                {/* ── Cabecera del vendedor ── */}
+                <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">
+                      {iniciales}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-base capitalize">{v.vendedor}</p>
+                      <p className="text-xs text-muted-foreground">{v.cantidadVentas} operaciones en total</p>
+                    </div>
+                  </div>
+
+                  {/* ── Stats del día ── */}
+                  <div className="flex gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
+                      <CalendarDays className="w-4 h-4 text-primary shrink-0" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Hoy — vendido</p>
+                        <p className="font-bold text-sm text-primary">{formatCurrency(v.hoy.totalVentas)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                      <TrendingUp className="w-4 h-4 text-green-600 shrink-0" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Hoy — ganancia</p>
+                        <p className="font-bold text-sm text-green-700">{formatCurrency(v.hoy.ganancia)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 bg-muted/40 rounded-lg px-3 py-2">
+                      <Users className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total histórico</p>
+                        <p className="font-bold text-sm">{formatCurrency(v.gananciaGenerada)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto shrink-0"
+                    onClick={() => setExpandido(abierto ? null : v.vendedor)}
+                  >
+                    {abierto ? <><ChevronUp className="w-4 h-4" /> Ocultar</> : <><ChevronDown className="w-4 h-4" /> Ver productos</>}
+                  </button>
+                </div>
+
+                {/* ── Detalle expandido ── */}
+                {abierto && (
+                  <div className="border-t grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x">
+                    {/* Hoy */}
+                    <div className="p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <CalendarDays className="w-4 h-4 text-primary" />
+                        <p className="font-semibold text-sm">Productos vendidos hoy</p>
+                        {v.hoy.cantidadVentas > 0 && <Badge variant="secondary">{v.hoy.cantidadVentas} operac.</Badge>}
+                      </div>
+                      {v.productosHoy.length === 0 ? (
+                        <p className="text-sm text-muted-foreground italic">Sin ventas hoy</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {v.productosHoy.map(p => (
+                            <div key={p.nombre} className="flex items-center justify-between text-sm p-2 rounded bg-muted/30">
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium truncate">{p.nombre}</p>
+                                <p className="text-xs text-muted-foreground">{p.cantidad} unid. · ganancia: <span className="text-green-700 font-medium">{formatCurrency(p.ganancia)}</span></p>
+                              </div>
+                              <p className="font-bold ml-3 shrink-0">{formatCurrency(p.ingresos)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {/* Top histórico */}
+                    <div className="p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Package className="w-4 h-4 text-muted-foreground" />
+                        <p className="font-semibold text-sm">Top productos histórico</p>
+                      </div>
+                      {v.topProductosGlobal.length === 0 ? (
+                        <p className="text-sm text-muted-foreground italic">Sin ventas registradas</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {v.topProductosGlobal.map((p, i) => (
+                            <div key={p.nombre} className="flex items-center gap-3 text-sm p-2 rounded bg-muted/30">
+                              <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center font-bold shrink-0">{i + 1}</span>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium truncate">{p.nombre}</p>
+                                <p className="text-xs text-muted-foreground">{p.cantidad} unid. vendidas</p>
+                              </div>
+                              <p className="font-bold ml-2 shrink-0">{formatCurrency(p.ingresos)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
         </TabsContent>
       </Tabs>
     </div>
