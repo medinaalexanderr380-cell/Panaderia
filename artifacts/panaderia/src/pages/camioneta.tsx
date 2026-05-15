@@ -222,6 +222,8 @@ function TabStock({ vendedor, stock, isLoading, onCaducado }: { vendedor: Vended
 }
 
 // ─── Autocomplete genérico ────────────────────────────────────────────────────
+const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
 interface ProductoItem { codigo: string; nombre: string; descripcion: string; stock: number }
 
 function useClickOutside(ref: React.RefObject<HTMLElement | null>, cb: () => void) {
@@ -249,7 +251,7 @@ function AutocompleteProducto({
   useClickOutside(containerRef, () => setOpen(false));
 
   const filtrados = value.trim().length > 0
-    ? productos.filter(p => p.nombre.toLowerCase().includes(value.trim().toLowerCase())).slice(0, 8)
+    ? productos.filter(p => norm(p.nombre).includes(norm(value))).slice(0, 8)
     : [];
 
   return (
@@ -300,7 +302,7 @@ function AutocompleteStock({
   useClickOutside(containerRef, () => setOpen(false));
 
   const filtrados = value.trim().length > 0
-    ? stock.filter(p => p.nombre.toLowerCase().includes(value.trim().toLowerCase())).slice(0, 8)
+    ? stock.filter(p => norm(p.nombre).includes(norm(value))).slice(0, 8)
     : stock.slice(0, 8);
 
   return (
@@ -363,7 +365,7 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
     queryFn: () => fetch("/api/productos", { credentials: "include" }).then(r => r.json()),
   });
 
-  const productoPreview = todosProductos?.find(p => p.nombre.toLowerCase() === nombreInput.trim().toLowerCase());
+  const productoPreview = todosProductos?.find(p => norm(p.nombre) === norm(nombreInput));
 
   const cargaMutation = useCargaMutation(vendedor, () => {
     toast({ title: `¡Camioneta de ${nombre} cargada exitosamente!` });
@@ -372,7 +374,7 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
   });
 
   const resolverCodigo = (nombreBuscado: string) => {
-    const match = todosProductos?.find(p => p.nombre.toLowerCase() === nombreBuscado.trim().toLowerCase());
+    const match = todosProductos?.find(p => norm(p.nombre) === norm(nombreBuscado));
     if (match) return { codigo: match.codigo, nombre: match.nombre };
     const base = nombreBuscado.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 16);
     return { codigo: base || "PROD" + Date.now(), nombre: nombreBuscado.trim() };
