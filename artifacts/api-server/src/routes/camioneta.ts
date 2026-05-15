@@ -160,6 +160,53 @@ router.post("/ventas", async (req, res) => {
   return res.status(201).json({ id: venta.id, total: totalVenta, ganancia: totalGanancia, origen: "camioneta" });
 });
 
+router.post("/devolver", async (req, res) => {
+  const { vendedor, items } = req.body as {
+    vendedor: string;
+    items: { productoCodigo: string; cantidad: number }[];
+  };
+
+  const v = vendedor?.toLowerCase();
+  if (!validarVendedor(v))
+    return res.status(400).json({ error: "Vendedor inválido (michel o david)" });
+  if (!items || !Array.isArray(items) || items.length === 0)
+    return res.status(400).json({ error: "Se requieren items para devolver" });
+
+  const resultados = [];
+
+  for (const item of items) {
+    if (!item.productoCodigo?.trim() || !item.cantidad || item.cantidad <= 0)
+      return res.status(400).json({ error: `Item inválido: ${JSON.stringify(item)}` });
+
+    const codigo = item.productoCodigo.trim().toUpperCase();
+    const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, codigo));
+    if (!producto) return res.status(404).json({ error: `Producto no encontrado: ${codigo}` });
+
+    const stockCamioneta = v === "michel" ? producto.stockCamionetaMichel : producto.stockCamionetaDavid;
+    if (stockCamioneta < item.cantidad)
+      return res.status(400).json({ error: `No hay suficiente stock en camioneta de ${vendedor} para "${producto.nombre}". Disponible: ${stockCamioneta}` });
+
+    let updated;
+    if (v === "michel") {
+      [updated] = await db.update(productosTable).set({
+        stock: sql`${productosTable.stock} + ${item.cantidad}`,
+        stockCamionetaMichel: sql`${productosTable.stockCamionetaMichel} - ${item.cantidad}`,
+        actualizadoEn: new Date(),
+      }).where(eq(productosTable.codigo, codigo)).returning();
+    } else {
+      [updated] = await db.update(productosTable).set({
+        stock: sql`${productosTable.stock} + ${item.cantidad}`,
+        stockCamionetaDavid: sql`${productosTable.stockCamionetaDavid} - ${item.cantidad}`,
+        actualizadoEn: new Date(),
+      }).where(eq(productosTable.codigo, codigo)).returning();
+    }
+
+    resultados.push({ codigo: updated.codigo, nombre: updated.nombre });
+  }
+
+  return res.json({ mensaje: "Devolución al depósito realizada exitosamente", resultados });
+});
+
 router.post("/caducado", async (req, res) => {
   const { productoCodigo, cantidad, origen, vendedor } = req.body as {
     productoCodigo: string; cantidad: number; origen: "panaderia" | "camioneta"; vendedor?: string

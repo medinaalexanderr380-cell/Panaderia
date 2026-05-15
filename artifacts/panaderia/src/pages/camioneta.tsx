@@ -12,7 +12,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Truck, Plus, Trash2, ShoppingCart, AlertTriangle, ArrowDownToLine, Lock, CheckCircle, User } from "lucide-react";
+import { Truck, Plus, Trash2, ShoppingCart, AlertTriangle, ArrowDownToLine, Lock, CheckCircle, User, Undo2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const fmt = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
@@ -160,64 +160,164 @@ async function verificarCredenciales(username: string, password: string): Promis
 // ─── Pestaña: Stock ───────────────────────────────────────────────────────────
 function TabStock({ vendedor, stock, isLoading, onCaducado }: { vendedor: Vendedor; stock: StockItem[] | undefined; isLoading: boolean; onCaducado: (item: StockItem) => void }) {
   const nombre = VENDEDORES.find(v => v.username === vendedor)?.nombre;
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const [devolverItem, setDevolverItem] = useState<StockItem | null>(null);
+  const [devolverCantidad, setDevolverCantidad] = useState<number | "">(1);
+  const [credOpen, setCredOpen] = useState(false);
+  const [credError, setCredError] = useState("");
+  const [verifying, setVerifying] = useState(false);
+
+  const devolverMutation = useMutation({
+    mutationFn: (items: { productoCodigo: string; cantidad: number }[]) =>
+      fetch("/api/camioneta/devolver", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vendedor, items }),
+      }).then(async r => { if (!r.ok) throw new Error((await r.json()).error); return r.json(); }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["camioneta-stock"] });
+      toast({ title: "Productos devueltos al depósito" });
+      setDevolverItem(null);
+      setDevolverCantidad(1);
+    },
+    onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
+  });
+
+  const handleDevolverClick = (item: StockItem) => {
+    setDevolverItem(item);
+    setDevolverCantidad(item.stockCamioneta);
+    setCredError("");
+  };
+
+  const handleCredConfirm = async (password: string) => {
+    if (!devolverItem || !devolverCantidad || Number(devolverCantidad) <= 0) return;
+    setVerifying(true);
+    setCredError("");
+    const result = await verificarCredenciales(vendedor, password);
+    setVerifying(false);
+    if (!result.ok) { setCredError(result.error!); return; }
+    setCredOpen(false);
+    devolverMutation.mutate([{ productoCodigo: devolverItem.codigo, cantidad: Number(devolverCantidad) }]);
+  };
+
   return (
-    <Card>
-      <CardHeader className="bg-muted/30 border-b pb-4">
-        <CardTitle className="flex items-center gap-2">
-          <Truck className="w-5 h-5 text-primary" /> Inventario de {nombre}
-        </CardTitle>
-      </CardHeader>
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader className="bg-muted/40">
-            <TableRow>
-              <TableHead>Producto</TableHead>
-              <TableHead className="text-center">Stock a bordo</TableHead>
-              <TableHead className="text-right">Precio Venta</TableHead>
-              <TableHead className="text-right">Valor</TableHead>
-              <TableHead></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-8">Cargando...</TableCell></TableRow>
-            ) : !stock?.length ? (
+    <>
+      <Card>
+        <CardHeader className="bg-muted/30 border-b pb-4">
+          <CardTitle className="flex items-center gap-2">
+            <Truck className="w-5 h-5 text-primary" /> Inventario de {nombre}
+          </CardTitle>
+        </CardHeader>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader className="bg-muted/40">
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-12">
-                  <Truck className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                  <p className="text-muted-foreground">La camioneta de {nombre} está vacía. Cargá productos desde "Cargar".</p>
-                </TableCell>
+                <TableHead>Producto</TableHead>
+                <TableHead className="text-center">Stock a bordo</TableHead>
+                <TableHead className="text-right">Precio Venta</TableHead>
+                <TableHead className="text-right">Valor</TableHead>
+                <TableHead></TableHead>
               </TableRow>
-            ) : stock.map(item => (
-              <TableRow key={item.codigo}>
-                <TableCell>
-                  <p className="font-medium">{item.nombre}</p>
-                  {item.descripcion && <p className="text-xs text-muted-foreground">{item.descripcion}</p>}
-                </TableCell>
-                <TableCell className="text-center">
-                  <Badge variant={item.stockCamioneta <= 5 ? "destructive" : "secondary"}>
-                    {item.stockCamioneta} {item.unidad}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">{fmt(item.precioVenta)}</TableCell>
-                <TableCell className="text-right font-medium">{fmt(item.precioVenta * item.stockCamioneta)}</TableCell>
-                <TableCell>
-                  <Button variant="outline" size="sm" className="text-amber-600 border-amber-300 hover:bg-amber-50 text-xs" onClick={() => onCaducado(item)}>
-                    <AlertTriangle className="w-3.5 h-3.5 mr-1" /> Caducado
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-      {stock && stock.length > 0 && (
-        <div className="px-6 py-3 bg-muted/20 border-t flex justify-end gap-6 text-sm">
-          <span className="text-muted-foreground">Total unidades: <strong>{stock.reduce((s, i) => s + i.stockCamioneta, 0)}</strong></span>
-          <span className="text-muted-foreground">Valor total: <strong className="text-primary">{fmt(stock.reduce((s, i) => s + i.precioVenta * i.stockCamioneta, 0))}</strong></span>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow><TableCell colSpan={5} className="text-center py-8">Cargando...</TableCell></TableRow>
+              ) : !stock?.length ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-12">
+                    <Truck className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                    <p className="text-muted-foreground">La camioneta de {nombre} está vacía. Cargá productos desde "Cargar".</p>
+                  </TableCell>
+                </TableRow>
+              ) : stock.map(item => (
+                <TableRow key={item.codigo}>
+                  <TableCell>
+                    <p className="font-medium">{item.nombre}</p>
+                    {item.descripcion && <p className="text-xs text-muted-foreground">{item.descripcion}</p>}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant={item.stockCamioneta <= 5 ? "destructive" : "secondary"}>
+                      {item.stockCamioneta} {item.unidad}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">{fmt(item.precioVenta)}</TableCell>
+                  <TableCell className="text-right font-medium">{fmt(item.precioVenta * item.stockCamioneta)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5 justify-end">
+                      <Button variant="outline" size="sm" className="text-blue-600 border-blue-300 hover:bg-blue-50 text-xs" onClick={() => handleDevolverClick(item)}>
+                        <Undo2 className="w-3.5 h-3.5 mr-1" /> Devolver
+                      </Button>
+                      <Button variant="outline" size="sm" className="text-amber-600 border-amber-300 hover:bg-amber-50 text-xs" onClick={() => onCaducado(item)}>
+                        <AlertTriangle className="w-3.5 h-3.5 mr-1" /> Caducado
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
-      )}
-    </Card>
+        {stock && stock.length > 0 && (
+          <div className="px-6 py-3 bg-muted/20 border-t flex justify-end gap-6 text-sm">
+            <span className="text-muted-foreground">Total unidades: <strong>{stock.reduce((s, i) => s + i.stockCamioneta, 0)}</strong></span>
+            <span className="text-muted-foreground">Valor total: <strong className="text-primary">{fmt(stock.reduce((s, i) => s + i.precioVenta * i.stockCamioneta, 0))}</strong></span>
+          </div>
+        )}
+      </Card>
+
+      {/* ── Dialog: elegir cantidad a devolver ── */}
+      <Dialog open={!!devolverItem && !credOpen} onOpenChange={open => { if (!open) setDevolverItem(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Undo2 className="w-5 h-5 text-blue-600" /> Devolver al depósito
+            </DialogTitle>
+          </DialogHeader>
+          {devolverItem && (
+            <div className="space-y-4 py-2">
+              <div className="p-3 bg-muted/40 rounded-lg">
+                <p className="font-medium text-sm">{devolverItem.nombre}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Disponible en camioneta: <strong>{devolverItem.stockCamioneta} {devolverItem.unidad}</strong></p>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Cantidad a devolver</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={devolverItem.stockCamioneta}
+                  value={devolverCantidad}
+                  onChange={e => setDevolverCantidad(e.target.value === "" ? "" : Number(e.target.value))}
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground mt-1">Máximo: {devolverItem.stockCamioneta}</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDevolverItem(null)}>Cancelar</Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700"
+              disabled={!devolverCantidad || Number(devolverCantidad) <= 0 || Number(devolverCantidad) > (devolverItem?.stockCamioneta ?? 0)}
+              onClick={() => { setCredError(""); setCredOpen(true); }}
+            >
+              Continuar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <CredDialog
+        open={credOpen}
+        vendedor={vendedor}
+        onOpenChange={open => { setCredOpen(open); if (!open) setCredError(""); }}
+        onConfirm={handleCredConfirm}
+        isPending={verifying}
+        error={credError}
+        titulo="Autorizar devolución"
+      />
+    </>
   );
 }
 
