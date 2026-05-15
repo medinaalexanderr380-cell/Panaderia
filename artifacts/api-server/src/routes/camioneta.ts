@@ -59,13 +59,18 @@ router.post("/cargar", async (req, res) => {
 
     let updated;
     if (producto) {
+      if (producto.stock < item.cantidad)
+        return res.status(400).json({ error: `Stock insuficiente en depósito para "${producto.nombre}". Disponible: ${producto.stock}` });
+
       if (v === "michel") {
         [updated] = await db.update(productosTable).set({
+          stock: sql`${productosTable.stock} - ${item.cantidad}`,
           stockCamionetaMichel: sql`${productosTable.stockCamionetaMichel} + ${item.cantidad}`,
           actualizadoEn: new Date(),
         }).where(eq(productosTable.codigo, codigo)).returning();
       } else {
         [updated] = await db.update(productosTable).set({
+          stock: sql`${productosTable.stock} - ${item.cantidad}`,
           stockCamionetaDavid: sql`${productosTable.stockCamionetaDavid} + ${item.cantidad}`,
           actualizadoEn: new Date(),
         }).where(eq(productosTable.codigo, codigo)).returning();
