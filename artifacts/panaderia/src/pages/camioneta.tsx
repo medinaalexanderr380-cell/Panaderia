@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -221,6 +221,68 @@ function TabStock({ vendedor, stock, isLoading, onCaducado }: { vendedor: Vended
   );
 }
 
+// ─── Autocomplete de productos ────────────────────────────────────────────────
+interface ProductoItem { codigo: string; nombre: string; descripcion: string; stock: number }
+
+function AutocompleteProducto({
+  value, onChange, onSelect, productos, placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSelect: (p: ProductoItem) => void;
+  productos: ProductoItem[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const filtrados = value.trim().length > 0
+    ? productos.filter(p => p.nombre.toLowerCase().includes(value.trim().toLowerCase())).slice(0, 8)
+    : [];
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <Input
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => { if (value.trim()) setOpen(true); }}
+        placeholder={placeholder}
+        autoComplete="off"
+        required
+      />
+      {open && filtrados.length > 0 && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-md shadow-lg max-h-52 overflow-y-auto">
+          {filtrados.map(p => (
+            <button
+              key={p.codigo}
+              type="button"
+              className="w-full text-left px-3 py-2.5 hover:bg-muted/60 transition-colors border-b border-border/40 last:border-0"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { onSelect(p); onChange(p.nombre); setOpen(false); }}
+            >
+              <p className="text-sm font-medium leading-tight">{p.nombre}</p>
+              {p.descripcion
+                ? <p className="text-xs text-muted-foreground mt-0.5">{p.descripcion}</p>
+                : <p className="text-xs text-muted-foreground/50 mt-0.5 italic">Sin descripción</p>
+              }
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Pestaña: Cargar ──────────────────────────────────────────────────────────
 function TabCargar({ vendedor }: { vendedor: Vendedor }) {
   const { toast } = useToast();
@@ -303,16 +365,13 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
             <form onSubmit={handleAddItem} className="flex flex-wrap items-end gap-3">
               <div className="flex-1 min-w-[160px]">
                 <label className="text-xs text-muted-foreground mb-1 block">Nombre del producto</label>
-                <Input
+                <AutocompleteProducto
                   value={nombreInput}
-                  onChange={e => setNombreInput(e.target.value)}
+                  onChange={setNombreInput}
+                  onSelect={p => setNombreInput(p.nombre)}
+                  productos={todosProductos ?? []}
                   placeholder="Pan de sal..."
-                  list="productos-cargar-list"
-                  required
                 />
-                <datalist id="productos-cargar-list">
-                  {todosProductos?.map(p => <option key={p.codigo} value={p.nombre} />)}
-                </datalist>
                 {productoPreview && (
                   <div className="mt-1.5 p-2 bg-primary/5 border border-primary/20 rounded text-xs space-y-0.5">
                     <p className="text-muted-foreground italic">
