@@ -128,6 +128,7 @@ router.get("/vendedores-detalle", async (req, res) => {
       gananciaGenerada: sql<number>`sum(${ventasTable.ganancia}::numeric)`,
     })
     .from(ventasTable)
+    .where(gte(ventasTable.fecha, inicioMesActual()))
     .groupBy(ventasTable.vendedor);
 
   const resumenHoy = await db
@@ -151,6 +152,7 @@ router.get("/vendedores-detalle", async (req, res) => {
     })
     .from(itemsVentaTable)
     .innerJoin(ventasTable, eq(itemsVentaTable.ventaId, ventasTable.id))
+    .where(gte(ventasTable.fecha, inicioMesActual()))
     .groupBy(ventasTable.vendedor, itemsVentaTable.productoNombre)
     .orderBy(desc(sql`sum(${itemsVentaTable.cantidad})`));
 

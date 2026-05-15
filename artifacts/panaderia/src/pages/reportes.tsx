@@ -212,7 +212,7 @@ export default function Reportes() {
                     <div className="flex items-center gap-2 bg-muted/40 rounded-lg px-3 py-2">
                       <Users className="w-4 h-4 text-muted-foreground shrink-0" />
                       <div>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total histórico</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Este mes — ganancia</p>
                         <p className="font-bold text-sm">{formatCurrency(v.gananciaGenerada)}</p>
                       </div>
                     </div>
