@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import {
-  Store, ShoppingCart, Package, Users, BarChart, Truck, ShieldCheck, AlertTriangle,
+  Store, ShoppingCart, Package, Users, BarChart, Truck, ShieldCheck, AlertTriangle, ShoppingBag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -11,15 +11,18 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
 
-  const navigation = [
+  const mainNav = [
     { name: "Inicio", href: "/", icon: Store },
     { name: "Ventas", href: "/ventas", icon: ShoppingCart },
     { name: "Productos", href: "/productos", icon: Package },
-    { name: "Compras", href: "/compras", icon: Truck },
+    { name: "Compras", href: "/compras", icon: ShoppingBag },
     { name: "Camioneta", href: "/camioneta", icon: Truck },
     { name: "Proveedores", href: "/proveedores", icon: Users },
     { name: "Reportes", href: "/reportes", icon: BarChart },
     { name: "Pérdidas", href: "/perdidas", icon: AlertTriangle },
+  ];
+
+  const adminNav = [
     { name: "Usuarios", href: "/usuarios", icon: ShieldCheck },
   ];
 
@@ -27,9 +30,12 @@ export function Layout({ children }: LayoutProps) {
     { name: "Inicio", href: "/", icon: Store },
     { name: "Ventas", href: "/ventas", icon: ShoppingCart },
     { name: "Camioneta", href: "/camioneta", icon: Truck },
-    { name: "Productos", href: "/productos", icon: Package },
-    { name: "Reportes", href: "/reportes", icon: BarChart },
+    { name: "Compras", href: "/compras", icon: ShoppingBag },
+    { name: "Pérdidas", href: "/perdidas", icon: AlertTriangle },
   ];
+
+  const isActive = (href: string) =>
+    href === "/" ? location === "/" : location.startsWith(href);
 
   return (
     <div className="min-h-screen bg-background font-sans">
@@ -48,25 +54,42 @@ export function Layout({ children }: LayoutProps) {
             </Link>
           </div>
 
-          <nav className="px-4 space-y-1 flex-1">
-            {navigation.map((item) => {
-              const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
-              return (
+          <nav className="px-4 flex-1 flex flex-col">
+            <div className="space-y-1 flex-1">
+              {mainNav.map((item) => (
                 <Link
                   key={item.name}
                   href={item.href}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-sm font-medium",
-                    isActive
+                    isActive(item.href)
                       ? "bg-sidebar-accent text-sidebar-accent-foreground"
                       : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                   )}
                 >
-                  <item.icon className={cn("w-5 h-5", isActive ? "text-primary" : "text-sidebar-foreground/60")} />
+                  <item.icon className={cn("w-5 h-5", isActive(item.href) ? "text-primary" : "text-sidebar-foreground/60")} />
                   {item.name}
                 </Link>
-              );
-            })}
+              ))}
+            </div>
+
+            <div className="border-t border-sidebar-border pt-3 pb-4 mt-4 space-y-1">
+              {adminNav.map((item) => (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-sm font-medium",
+                    isActive(item.href)
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/50 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  )}
+                >
+                  <item.icon className={cn("w-5 h-5", isActive(item.href) ? "text-primary" : "text-sidebar-foreground/40")} />
+                  {item.name}
+                </Link>
+              ))}
+            </div>
           </nav>
         </aside>
 
@@ -94,22 +117,19 @@ export function Layout({ children }: LayoutProps) {
 
         <nav className="fixed bottom-0 left-0 right-0 z-50 bg-sidebar border-t border-sidebar-border">
           <div className="grid grid-cols-5 h-16">
-            {mobileNav.map((item) => {
-              const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={cn(
-                    "flex flex-col items-center justify-center gap-0.5 transition-colors text-[10px] font-medium",
-                    isActive ? "text-primary" : "text-sidebar-foreground/60"
-                  )}
-                >
-                  <item.icon className={cn("w-5 h-5", isActive ? "text-primary" : "text-sidebar-foreground/50")} />
-                  <span>{item.name}</span>
-                </Link>
-              );
-            })}
+            {mobileNav.map((item) => (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-0.5 transition-colors text-[10px] font-medium",
+                  isActive(item.href) ? "text-primary" : "text-sidebar-foreground/60"
+                )}
+              >
+                <item.icon className={cn("w-5 h-5", isActive(item.href) ? "text-primary" : "text-sidebar-foreground/50")} />
+                <span>{item.name}</span>
+              </Link>
+            ))}
           </div>
         </nav>
       </div>
