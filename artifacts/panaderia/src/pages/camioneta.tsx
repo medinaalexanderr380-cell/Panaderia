@@ -221,34 +221,36 @@ function TabStock({ vendedor, stock, isLoading, onCaducado }: { vendedor: Vended
   );
 }
 
-// ─── Autocomplete de productos ────────────────────────────────────────────────
+// ─── Autocomplete genérico ────────────────────────────────────────────────────
 interface ProductoItem { codigo: string; nombre: string; descripcion: string; stock: number }
 
+function useClickOutside(ref: React.RefObject<HTMLElement | null>, cb: () => void) {
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) cb();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [ref, cb]);
+}
+
 function AutocompleteProducto({
-  value, onChange, onSelect, productos, placeholder,
+  value, onChange, onSelect, productos, placeholder, required: req,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSelect: (p: ProductoItem) => void;
   productos: ProductoItem[];
   placeholder?: string;
+  required?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  useClickOutside(containerRef, () => setOpen(false));
 
   const filtrados = value.trim().length > 0
     ? productos.filter(p => p.nombre.toLowerCase().includes(value.trim().toLowerCase())).slice(0, 8)
     : [];
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
 
   return (
     <div ref={containerRef} className="relative">
@@ -258,7 +260,7 @@ function AutocompleteProducto({
         onFocus={() => { if (value.trim()) setOpen(true); }}
         placeholder={placeholder}
         autoComplete="off"
-        required
+        required={req}
       />
       {open && filtrados.length > 0 && (
         <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-md shadow-lg max-h-52 overflow-y-auto">
@@ -275,6 +277,66 @@ function AutocompleteProducto({
                 ? <p className="text-xs text-muted-foreground mt-0.5">{p.descripcion}</p>
                 : <p className="text-xs text-muted-foreground/50 mt-0.5 italic">Sin descripción</p>
               }
+              <p className="text-xs text-muted-foreground/70 mt-0.5">Stock depósito: {p.stock}</p>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AutocompleteStock({
+  value, onChange, onSelect, stock, placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSelect: (item: StockItem) => void;
+  stock: StockItem[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useClickOutside(containerRef, () => setOpen(false));
+
+  const filtrados = value.trim().length > 0
+    ? stock.filter(p => p.nombre.toLowerCase().includes(value.trim().toLowerCase())).slice(0, 8)
+    : stock.slice(0, 8);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <Input
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder={placeholder}
+        autoComplete="off"
+      />
+      {open && filtrados.length > 0 && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-md shadow-lg max-h-60 overflow-y-auto">
+          {filtrados.map(item => (
+            <button
+              key={item.codigo}
+              type="button"
+              className="w-full text-left px-3 py-2.5 hover:bg-muted/60 transition-colors border-b border-border/40 last:border-0"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { onSelect(item); onChange(""); setOpen(false); }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium leading-tight">{item.nombre}</p>
+                  {item.descripcion
+                    ? <p className="text-xs text-muted-foreground mt-0.5">{item.descripcion}</p>
+                    : <p className="text-xs text-muted-foreground/40 mt-0.5 italic">Sin descripción</p>
+                  }
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xs font-semibold text-primary">{fmt(item.precioVenta)}</p>
+                  <p className={`text-xs mt-0.5 ${item.stockCamioneta === 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                    {item.stockCamioneta} disp.
+                  </p>
+                </div>
+              </div>
             </button>
           ))}
         </div>
@@ -533,31 +595,21 @@ function TabVentaRuta({ vendedor, stock, onCaducado }: { vendedor: Vendedor; sto
           </CardTitle>
         </CardHeader>
         <CardContent className="p-4 space-y-3">
-          <div className="relative">
-            <Input placeholder="Buscar producto por nombre..." className="pl-4" value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
           {!stock?.length ? (
             <p className="text-center py-8 text-muted-foreground">La camioneta de {nombre} está vacía. Cargá productos primero.</p>
           ) : (
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {stockFiltrado.length === 0 ? (
-                <p className="text-center py-6 text-muted-foreground text-sm">No se encontraron productos</p>
-              ) : stockFiltrado.map(item => (
-                <div key={item.codigo} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 cursor-pointer" onClick={() => addToCart(item)}>
-                  <div>
-                    <p className="font-medium text-sm">{item.nombre}</p>
-                    {item.descripcion && <p className="text-xs text-muted-foreground">{item.descripcion}</p>}
-                    <p className="text-xs text-muted-foreground">Disponible: {item.stockCamioneta} · {fmt(item.precioVenta)}</p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button variant="outline" size="sm" className="text-amber-600 border-amber-300 hover:bg-amber-50 text-xs" onClick={(e) => { e.stopPropagation(); onCaducado(item); }}>
-                      <AlertTriangle className="w-3.5 h-3.5 mr-1" /> Caducado
-                    </Button>
-                    <Button variant="ghost" size="sm" className="text-primary" onClick={(e) => { e.stopPropagation(); addToCart(item); }}><Plus className="w-4 h-4" /></Button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <>
+              <AutocompleteStock
+                value={search}
+                onChange={setSearch}
+                onSelect={item => addToCart(item)}
+                stock={stock}
+                placeholder="Buscar y agregar producto..."
+              />
+              {stockFiltrado.length === 0 && search.trim() ? (
+                <p className="text-center py-4 text-muted-foreground text-sm">No se encontraron productos</p>
+              ) : null}
+            </>
           )}
         </CardContent>
       </Card>
