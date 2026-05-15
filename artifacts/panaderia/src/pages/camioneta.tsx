@@ -192,7 +192,7 @@ function TabStock({ vendedor, stock, isLoading, onCaducado }: { vendedor: Vended
               <TableRow key={item.codigo}>
                 <TableCell>
                   <p className="font-medium">{item.nombre}</p>
-                  <p className="text-xs text-muted-foreground font-mono">{item.codigo}</p>
+                  {item.descripcion && <p className="text-xs text-muted-foreground">{item.descripcion}</p>}
                 </TableCell>
                 <TableCell className="text-center">
                   <Badge variant={item.stockCamioneta <= 5 ? "destructive" : "secondary"}>
@@ -234,10 +234,12 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
 
   const nombre = VENDEDORES.find(v => v.username === vendedor)?.nombre;
 
-  const { data: todosProductos } = useQuery<{ codigo: string; nombre: string }[]>({
+  const { data: todosProductos } = useQuery<{ codigo: string; nombre: string; descripcion: string; stock: number }[]>({
     queryKey: ["productos-lista"],
     queryFn: () => fetch("/api/productos", { credentials: "include" }).then(r => r.json()),
   });
+
+  const productoPreview = todosProductos?.find(p => p.nombre.toLowerCase() === nombreInput.trim().toLowerCase());
 
   const cargaMutation = useCargaMutation(vendedor, () => {
     toast({ title: `¡Camioneta de ${nombre} cargada exitosamente!` });
@@ -311,6 +313,12 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
                 <datalist id="productos-cargar-list">
                   {todosProductos?.map(p => <option key={p.codigo} value={p.nombre} />)}
                 </datalist>
+                {productoPreview && (
+                  <div className="mt-1.5 p-2 bg-primary/5 border border-primary/20 rounded text-xs space-y-0.5">
+                    {productoPreview.descripcion && <p className="text-muted-foreground">{productoPreview.descripcion}</p>}
+                    <p>Depósito: <strong className={productoPreview.stock === 0 ? "text-destructive" : "text-foreground"}>{productoPreview.stock} unidades</strong></p>
+                  </div>
+                )}
               </div>
               <div className="w-24">
                 <label className="text-xs text-muted-foreground mb-1 block">Cantidad</label>

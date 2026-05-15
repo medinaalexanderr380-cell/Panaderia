@@ -165,7 +165,6 @@ export default function Dashboard() {
                 <div key={producto.codigo} className="flex items-center justify-between">
                   <div className="flex flex-col">
                     <span className="text-sm font-medium">{producto.nombre}</span>
-                    <span className="text-xs text-muted-foreground text-ellipsis overflow-hidden whitespace-nowrap w-[150px]">{producto.codigo}</span>
                   </div>
                   <div className="flex flex-col items-end">
                     <span className="text-sm font-bold">{formatCurrency(producto.ingresos)}</span>
@@ -194,7 +193,6 @@ export default function Dashboard() {
                 <div key={producto.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                   <div className="flex flex-col">
                     <span className="text-sm font-medium">{producto.nombre}</span>
-                    <span className="text-xs text-muted-foreground">Código: {producto.codigo}</span>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="flex flex-col items-end">

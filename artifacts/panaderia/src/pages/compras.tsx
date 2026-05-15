@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useListarProveedores,
   useListarCompras, getListarComprasQueryKey,
@@ -49,6 +49,10 @@ export default function Compras() {
   const [filtroProveedor, setFiltroProveedor] = useState("");
 
   const { data: proveedores } = useListarProveedores();
+  const { data: productosLista } = useQuery<{ codigo: string; nombre: string; precioCosto: string }[]>({
+    queryKey: ["productos-lista-compras"],
+    queryFn: () => fetch("/api/productos", { credentials: "include" }).then(r => r.json()),
+  });
   const { data: compras, isLoading: isLoadingCompras } = useListarCompras({}, {
     query: { queryKey: getListarComprasQueryKey({}) }
   });
@@ -221,7 +225,20 @@ export default function Compras() {
               <form onSubmit={handleAddItem} className="flex flex-wrap items-end gap-3">
                 <div className="flex-[2] min-w-[160px]">
                   <label className="text-xs text-muted-foreground mb-1 block">Nombre del producto</label>
-                  <Input value={nombreInput} onChange={e => setNombreInput(e.target.value)} placeholder="Pan de sal..." required />
+                  <Input
+                    value={nombreInput}
+                    onChange={e => {
+                      setNombreInput(e.target.value);
+                      const match = productosLista?.find(p => p.nombre.toLowerCase() === e.target.value.toLowerCase());
+                      if (match) setCostoInput(Number(match.precioCosto));
+                    }}
+                    placeholder="Pan de sal..."
+                    list="productos-compras-list"
+                    required
+                  />
+                  <datalist id="productos-compras-list">
+                    {productosLista?.map(p => <option key={p.codigo} value={p.nombre} />)}
+                  </datalist>
                 </div>
                 <div className="w-28">
                   <label className="text-xs text-muted-foreground mb-1 block">Costo unitario $</label>

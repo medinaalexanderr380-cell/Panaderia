@@ -8,6 +8,8 @@ import {
   useObtenerResumenProveedor, getObtenerResumenProveedorQueryKey,
   useObtenerProductosPorProveedor, getObtenerProductosPorProveedorQueryKey
 } from "@workspace/api-client-react";
+import { format, parseISO } from "date-fns";
+import { es } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +19,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Users, Phone, Mail, MapPin, Building2, Package, TrendingUp, ChevronRight } from "lucide-react";
+import { Search, Users, Phone, Mail, Building2, Package, TrendingUp, ChevronRight, ShoppingBag, Calendar, ChevronDown } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
@@ -211,12 +213,20 @@ export default function Proveedores() {
 }
 
 function ProveedorDetalleSheet({ proveedorId, onClose }: { proveedorId: number | null, onClose: () => void }) {
+  const [expandedCompra, setExpandedCompra] = useState<number | null>(null);
+
   const { data: resumen } = useObtenerResumenProveedor(proveedorId!, { 
     query: { enabled: !!proveedorId, queryKey: getObtenerResumenProveedorQueryKey(proveedorId!) } 
   });
   
   const { data: productos } = useObtenerProductosPorProveedor(proveedorId!, {
     query: { enabled: !!proveedorId, queryKey: getObtenerProductosPorProveedorQueryKey(proveedorId!) }
+  });
+
+  const { data: comprasProveedor } = useQuery<any[]>({
+    queryKey: ["proveedor-compras", proveedorId],
+    queryFn: () => fetch(`/api/proveedores/${proveedorId}/compras`, { credentials: "include" }).then(r => r.json()),
+    enabled: !!proveedorId,
   });
 
   return (
@@ -232,47 +242,95 @@ function ProveedorDetalleSheet({ proveedorId, onClose }: { proveedorId: number |
               <SheetDescription>Detalle y métricas del proveedor</SheetDescription>
             </SheetHeader>
 
-            <div className="grid grid-cols-2 gap-4 mb-8">
+            <div className="grid grid-cols-3 gap-3 mb-8">
               <Card className="bg-primary/5 border-primary/10 shadow-none">
-                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                  <TrendingUp className="w-6 h-6 text-primary mb-2" />
-                  <span className="text-2xl font-bold">{formatCurrency(resumen.totalInvertido)}</span>
-                  <span className="text-xs text-muted-foreground">Inversión Total</span>
+                <CardContent className="p-3 flex flex-col items-center justify-center text-center">
+                  <TrendingUp className="w-5 h-5 text-primary mb-1" />
+                  <span className="text-lg font-bold">{formatCurrency(resumen.totalInvertido)}</span>
+                  <span className="text-xs text-muted-foreground">Invertido</span>
                 </CardContent>
               </Card>
               <Card className="bg-muted/30 border-border shadow-none">
-                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                  <Package className="w-6 h-6 text-muted-foreground mb-2" />
-                  <span className="text-2xl font-bold">{resumen.totalProductos}</span>
+                <CardContent className="p-3 flex flex-col items-center justify-center text-center">
+                  <Package className="w-5 h-5 text-muted-foreground mb-1" />
+                  <span className="text-lg font-bold">{resumen.totalProductos}</span>
                   <span className="text-xs text-muted-foreground">Productos</span>
+                </CardContent>
+              </Card>
+              <Card className="bg-muted/30 border-border shadow-none">
+                <CardContent className="p-3 flex flex-col items-center justify-center text-center">
+                  <ShoppingBag className="w-5 h-5 text-muted-foreground mb-1" />
+                  <span className="text-lg font-bold">{comprasProveedor?.length ?? 0}</span>
+                  <span className="text-xs text-muted-foreground">Compras</span>
                 </CardContent>
               </Card>
             </div>
 
-            <div className="space-y-4">
-              <h3 className="font-semibold text-lg flex items-center gap-2 border-b pb-2">
-                <Package className="w-5 h-5" /> Catálogo Suministrado
-              </h3>
-              
-              {productos?.length === 0 ? (
-                <p className="text-muted-foreground text-sm italic">Este proveedor no tiene productos asignados.</p>
-              ) : (
-                <div className="space-y-3">
+            {/* Productos del proveedor */}
+            {(productos?.length ?? 0) > 0 && (
+              <div className="space-y-3 mb-6">
+                <h3 className="font-semibold flex items-center gap-2 border-b pb-2">
+                  <Package className="w-4 h-4" /> Productos de este proveedor
+                </h3>
+                <div className="space-y-2">
                   {productos?.map(prod => (
                     <div key={prod.id} className="flex justify-between items-center p-3 rounded-lg border border-border bg-card hover:border-primary/30 transition-colors">
                       <div>
                         <p className="font-medium text-sm flex items-center gap-2">
                           {prod.nombre}
-                          {prod.stock <= prod.stockMinimo && <Badge variant="destructive" className="text-[10px] px-1 py-0">Low Stock</Badge>}
+                          {prod.stock <= prod.stockMinimo && <Badge variant="destructive" className="text-[10px] px-1 py-0">Stock bajo</Badge>}
                         </p>
-                        <p className="text-xs text-muted-foreground mt-1">Cód: {prod.codigo} · Stock: {prod.stock} {prod.unidad}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Stock: {prod.stock} {prod.unidad}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-semibold">{formatCurrency(prod.precioCosto)}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Costo</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Costo unit.</p>
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Historial de compras */}
+            <div className="space-y-3">
+              <h3 className="font-semibold flex items-center gap-2 border-b pb-2">
+                <ShoppingBag className="w-4 h-4" /> Historial de compras
+              </h3>
+              {!comprasProveedor?.length ? (
+                <p className="text-muted-foreground text-sm italic">Sin compras registradas para este proveedor.</p>
+              ) : (
+                <div className="space-y-2">
+                  {comprasProveedor.map((compra: any) => {
+                    const isOpen = expandedCompra === compra.id;
+                    const fechaLabel = format(parseISO(compra.fecha.split("T")[0]), "dd 'de' MMM yyyy", { locale: es });
+                    return (
+                      <div key={compra.id} className="border rounded-lg overflow-hidden">
+                        <button
+                          className="w-full flex items-center justify-between p-3 hover:bg-muted/30 transition-colors text-left"
+                          onClick={() => setExpandedCompra(isOpen ? null : compra.id)}
+                        >
+                          <div className="flex items-center gap-2">
+                            {isOpen ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
+                            <Calendar className="w-3.5 h-3.5 text-primary" />
+                            <span className="text-sm font-medium">{fechaLabel}</span>
+                            <span className="text-xs text-muted-foreground">· {compra.items?.length ?? 0} productos</span>
+                          </div>
+                          <span className="text-sm font-bold text-primary">{formatCurrency(compra.totalInvertido)}</span>
+                        </button>
+                        {isOpen && compra.items?.length > 0 && (
+                          <div className="border-t bg-muted/10 p-3 space-y-1.5">
+                            {compra.items.map((item: any, i: number) => (
+                              <div key={i} className="flex justify-between text-sm">
+                                <span>{item.productoNombre} <span className="text-muted-foreground">×{item.cantidad}</span></span>
+                                <span className="font-medium">{formatCurrency(item.subtotal)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
