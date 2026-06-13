@@ -177,7 +177,7 @@ function TabStock({ vendedor, stock, isLoading, onCaducado }: { vendedor: Vended
         body: JSON.stringify({ vendedor, items }),
       }).then(async r => { if (!r.ok) throw new Error((await r.json()).error); return r.json(); }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["camioneta-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["camioneta", "stock", vendedor] });
       toast({ title: "Productos devueltos al depósito" });
       setDevolverItem(null);
       setDevolverCantidad(1);

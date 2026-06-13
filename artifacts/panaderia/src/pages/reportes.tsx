@@ -1,19 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
 import { 
   useObtenerVentasPorDia, getObtenerVentasPorDiaQueryKey,
-  useObtenerTopProductos, getObtenerTopProductosQueryKey,
-  useObtenerReporteVendedores, getObtenerReporteVendedoresQueryKey,
-  useObtenerResumen, getObtenerResumenQueryKey
+  useObtenerTopProductos,
+  useObtenerReporteVendedores,
+  useObtenerResumen,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Cell } from "recharts";
+import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend } from "recharts";
 import { formatCurrency } from "@/lib/format";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
-import { BarChart as BarChartIcon, TrendingUp, Users, ChevronDown, ChevronUp, CalendarDays, Package, ShoppingBag, Truck } from "lucide-react";
+import { BarChart as BarChartIcon, TrendingUp, Users, ChevronDown, ChevronUp, CalendarDays, Package, ShoppingBag, Truck, Download, FileSpreadsheet } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
 interface VendedorDetalle {
@@ -36,6 +37,16 @@ interface ProveedorDetalle {
   productos: { codigo: string; nombre: string; cantidad: number; costoTotal: number; ingresos: number; ganancia: number }[];
 }
 
+interface CierreMes {
+  mes: string;
+  totalVentas: number;
+  totalGanancia: number;
+  totalCosto: number;
+  cantidadVentas: number;
+  porProveedor: { proveedorNombre: string; costoTotal: number; ingresos: number; ganancia: number; productos: { nombre: string; cantidad: number; costoTotal: number; ingresos: number; ganancia: number }[] }[];
+  porVendedor: { vendedor: string; totalVentas: number; ganancia: number; costoTotal: number; cantidadVentas: number }[];
+}
+
 export default function Reportes() {
   const { data: ventasMes } = useObtenerVentasPorDia({ dias: 30 }, { query: { queryKey: getObtenerVentasPorDiaQueryKey({ dias: 30 }) } });
   const { data: topProductos } = useObtenerTopProductos();
@@ -51,9 +62,24 @@ export default function Reportes() {
     queryFn: () => fetch("/api/reportes/por-proveedor", { credentials: "include" }).then(r => r.json()),
     refetchInterval: 30000,
   });
+  const { data: cierreMes } = useQuery<CierreMes>({
+    queryKey: ["reportes", "cierre-mes"],
+    queryFn: () => fetch("/api/reportes/cierre-mes", { credentials: "include" }).then(r => r.json()),
+    refetchInterval: 60000,
+  });
 
   const [expandido, setExpandido] = useState<string | null>(null);
   const [expandidoProv, setExpandidoProv] = useState<string | null>(null);
+  const [expandidoCierre, setExpandidoCierre] = useState(false);
+
+  const descargarCierreMes = () => {
+    const a = document.createElement("a");
+    a.href = "/api/reportes/cierre-mes/exportar";
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   const chartColors = [
     "hsl(var(--chart-1))",
@@ -101,6 +127,115 @@ export default function Reportes() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ── Cierre de Mes ── */}
+      <Card className="border-2 border-primary/20 bg-primary/5">
+        <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-center gap-3 flex-1">
+            <div className="w-11 h-11 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+              <FileSpreadsheet className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <p className="font-bold text-base">Cierre de Mes</p>
+              <p className="text-xs text-muted-foreground capitalize">{cierreMes?.mes ?? "Calculando..."} · {cierreMes?.cantidadVentas ?? 0} ventas</p>
+            </div>
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            <div className="flex items-center gap-2 bg-white border rounded-lg px-3 py-2">
+              <TrendingUp className="w-4 h-4 text-primary shrink-0" />
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total vendido</p>
+                <p className="font-bold text-sm text-primary">{formatCurrency(cierreMes?.totalVentas ?? 0)}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 bg-white border rounded-lg px-3 py-2">
+              <ShoppingBag className="w-4 h-4 text-orange-500 shrink-0" />
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total costo</p>
+                <p className="font-bold text-sm text-orange-700">{formatCurrency(cierreMes?.totalCosto ?? 0)}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              <TrendingUp className="w-4 h-4 text-green-600 shrink-0" />
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Ganancia neta</p>
+                <p className="font-bold text-sm text-green-700">{formatCurrency(cierreMes?.totalGanancia ?? 0)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setExpandidoCierre(v => !v)}
+            >
+              {expandidoCierre ? <><ChevronUp className="w-4 h-4" /> Ocultar</> : <><ChevronDown className="w-4 h-4" /> Ver detalle</>}
+            </button>
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={descargarCierreMes}>
+              <Download className="w-3.5 h-3.5" /> Descargar CSV
+            </Button>
+          </div>
+        </div>
+
+        {expandidoCierre && cierreMes && (
+          <div className="border-t grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x">
+            {/* Por vendedor */}
+            <div className="p-4">
+              <p className="font-semibold text-sm mb-3 flex items-center gap-2"><Users className="w-4 h-4 text-primary" /> Por vendedor</p>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Vendedor</TableHead>
+                      <TableHead className="text-right">Ventas</TableHead>
+                      <TableHead className="text-right">Costo</TableHead>
+                      <TableHead className="text-right">Ganancia</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cierreMes.porVendedor.map(v => (
+                      <TableRow key={v.vendedor}>
+                        <TableCell className="font-medium capitalize">{v.vendedor}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(v.totalVentas)}</TableCell>
+                        <TableCell className="text-right text-orange-700">{formatCurrency(v.costoTotal)}</TableCell>
+                        <TableCell className="text-right text-green-700 font-bold">{formatCurrency(v.ganancia)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+            {/* Por proveedor */}
+            <div className="p-4">
+              <p className="font-semibold text-sm mb-3 flex items-center gap-2"><Truck className="w-4 h-4 text-amber-600" /> A pagar por proveedor</p>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Proveedor</TableHead>
+                      <TableHead className="text-right">A pagarle</TableHead>
+                      <TableHead className="text-right">Me queda</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cierreMes.porProveedor.map(p => (
+                      <TableRow key={p.proveedorNombre}>
+                        <TableCell className="font-medium">{p.proveedorNombre}</TableCell>
+                        <TableCell className="text-right text-red-700 font-bold">{formatCurrency(p.costoTotal)}</TableCell>
+                        <TableCell className="text-right text-green-700 font-bold">{formatCurrency(p.ganancia)}</TableCell>
+                      </TableRow>
+                    ))}
+                    {cierreMes.porProveedor.length === 0 && (
+                      <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground">Sin datos</TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
 
       <Tabs defaultValue="ventas" className="w-full">
         <TabsList className="grid w-full md:w-[530px] grid-cols-4">

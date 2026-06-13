@@ -267,6 +267,188 @@ router.get("/por-proveedor", async (req, res) => {
   return res.json(Array.from(proveedoresMap.values()));
 });
 
+router.get("/cierre-mes", async (req, res) => {
+  const inicio = inicioMesActual();
+  const now = new Date();
+  const mes = now.toLocaleString("es-AR", { month: "long", year: "numeric" });
+
+  const [resumenVentas] = await db
+    .select({
+      totalVentas: sql<number>`coalesce(sum(${ventasTable.total}::numeric), 0)`,
+      totalGanancia: sql<number>`coalesce(sum(${ventasTable.ganancia}::numeric), 0)`,
+      cantidadVentas: sql<number>`count(*)`,
+    })
+    .from(ventasTable)
+    .where(gte(ventasTable.fecha, inicio));
+
+  const costoMesRows = await db
+    .select({
+      costoTotal: sql<number>`coalesce(sum(${itemsVentaTable.precioCosto}::numeric * ${itemsVentaTable.cantidad}), 0)`,
+    })
+    .from(itemsVentaTable)
+    .innerJoin(ventasTable, eq(itemsVentaTable.ventaId, ventasTable.id))
+    .where(gte(ventasTable.fecha, inicio));
+
+  const proveedorRows = await db
+    .select({
+      proveedorNombre: proveedoresTable.nombre,
+      productoCodigo: itemsVentaTable.productoCodigo,
+      productoNombre: itemsVentaTable.productoNombre,
+      cantidad: sql<number>`sum(${itemsVentaTable.cantidad})`,
+      costoTotal: sql<number>`sum(${itemsVentaTable.precioCosto}::numeric * ${itemsVentaTable.cantidad})`,
+      ingresos: sql<number>`sum(${itemsVentaTable.subtotal}::numeric)`,
+      ganancia: sql<number>`sum((${itemsVentaTable.precioUnitario}::numeric - ${itemsVentaTable.precioCosto}::numeric) * ${itemsVentaTable.cantidad})`,
+    })
+    .from(itemsVentaTable)
+    .innerJoin(ventasTable, eq(itemsVentaTable.ventaId, ventasTable.id))
+    .innerJoin(productosTable, eq(itemsVentaTable.productoCodigo, productosTable.codigo))
+    .leftJoin(proveedoresTable, eq(productosTable.proveedorId, proveedoresTable.id))
+    .where(gte(ventasTable.fecha, inicio))
+    .groupBy(proveedoresTable.nombre, itemsVentaTable.productoCodigo, itemsVentaTable.productoNombre)
+    .orderBy(proveedoresTable.nombre, desc(sql`sum(${itemsVentaTable.cantidad})`));
+
+  const vendedorRows = await db
+    .select({
+      vendedor: ventasTable.vendedor,
+      totalVentas: sql<number>`sum(${ventasTable.total}::numeric)`,
+      ganancia: sql<number>`sum(${ventasTable.ganancia}::numeric)`,
+      cantidadVentas: sql<number>`count(*)`,
+      costoTotal: sql<number>`sum(${itemsVentaTable.precioCosto}::numeric * ${itemsVentaTable.cantidad})`,
+    })
+    .from(ventasTable)
+    .innerJoin(itemsVentaTable, eq(itemsVentaTable.ventaId, ventasTable.id))
+    .where(gte(ventasTable.fecha, inicio))
+    .groupBy(ventasTable.vendedor);
+
+  const provMap = new Map<string, { proveedorNombre: string; costoTotal: number; ingresos: number; ganancia: number; productos: { nombre: string; cantidad: number; costoTotal: number; ingresos: number; ganancia: number }[] }>();
+  for (const r of proveedorRows) {
+    const key = r.proveedorNombre ?? "Sin proveedor";
+    if (!provMap.has(key)) provMap.set(key, { proveedorNombre: key, costoTotal: 0, ingresos: 0, ganancia: 0, productos: [] });
+    const e = provMap.get(key)!;
+    const c = Number(r.costoTotal ?? 0), ing = Number(r.ingresos ?? 0), gan = Number(r.ganancia ?? 0);
+    e.costoTotal += c; e.ingresos += ing; e.ganancia += gan;
+    e.productos.push({ nombre: r.productoNombre, cantidad: Number(r.cantidad), costoTotal: c, ingresos: ing, ganancia: gan });
+  }
+
+  return res.json({
+    mes,
+    totalVentas: Number(resumenVentas?.totalVentas ?? 0),
+    totalGanancia: Number(resumenVentas?.totalGanancia ?? 0),
+    totalCosto: Number(costoMesRows[0]?.costoTotal ?? 0),
+    cantidadVentas: Number(resumenVentas?.cantidadVentas ?? 0),
+    porProveedor: Array.from(provMap.values()),
+    porVendedor: vendedorRows.map(r => ({
+      vendedor: r.vendedor,
+      totalVentas: Number(r.totalVentas),
+      ganancia: Number(r.ganancia),
+      costoTotal: Number(r.costoTotal),
+      cantidadVentas: Number(r.cantidadVentas),
+    })),
+  });
+});
+
+router.get("/cierre-mes/exportar", async (req, res) => {
+  const inicio = inicioMesActual();
+  const now = new Date();
+  const mes = now.toLocaleString("es-AR", { month: "long", year: "numeric" });
+  const mesSlug = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  const [resumenVentas] = await db
+    .select({
+      totalVentas: sql<number>`coalesce(sum(${ventasTable.total}::numeric), 0)`,
+      totalGanancia: sql<number>`coalesce(sum(${ventasTable.ganancia}::numeric), 0)`,
+      cantidadVentas: sql<number>`count(*)`,
+    })
+    .from(ventasTable).where(gte(ventasTable.fecha, inicio));
+
+  const costoRows = await db
+    .select({ costoTotal: sql<number>`coalesce(sum(${itemsVentaTable.precioCosto}::numeric * ${itemsVentaTable.cantidad}), 0)` })
+    .from(itemsVentaTable)
+    .innerJoin(ventasTable, eq(itemsVentaTable.ventaId, ventasTable.id))
+    .where(gte(ventasTable.fecha, inicio));
+
+  const proveedorRows = await db
+    .select({
+      proveedorNombre: proveedoresTable.nombre,
+      productoNombre: itemsVentaTable.productoNombre,
+      cantidad: sql<number>`sum(${itemsVentaTable.cantidad})`,
+      costoTotal: sql<number>`sum(${itemsVentaTable.precioCosto}::numeric * ${itemsVentaTable.cantidad})`,
+      ingresos: sql<number>`sum(${itemsVentaTable.subtotal}::numeric)`,
+      ganancia: sql<number>`sum((${itemsVentaTable.precioUnitario}::numeric - ${itemsVentaTable.precioCosto}::numeric) * ${itemsVentaTable.cantidad})`,
+    })
+    .from(itemsVentaTable)
+    .innerJoin(ventasTable, eq(itemsVentaTable.ventaId, ventasTable.id))
+    .innerJoin(productosTable, eq(itemsVentaTable.productoCodigo, productosTable.codigo))
+    .leftJoin(proveedoresTable, eq(productosTable.proveedorId, proveedoresTable.id))
+    .where(gte(ventasTable.fecha, inicio))
+    .groupBy(proveedoresTable.nombre, itemsVentaTable.productoNombre)
+    .orderBy(proveedoresTable.nombre, desc(sql`sum(${itemsVentaTable.cantidad})`));
+
+  const vendedorRows = await db
+    .select({
+      vendedor: ventasTable.vendedor,
+      totalVentas: sql<number>`sum(${ventasTable.total}::numeric)`,
+      ganancia: sql<number>`sum(${ventasTable.ganancia}::numeric)`,
+      costoTotal: sql<number>`sum(${itemsVentaTable.precioCosto}::numeric * ${itemsVentaTable.cantidad})`,
+      cantidadVentas: sql<number>`count(distinct ${ventasTable.id})`,
+    })
+    .from(ventasTable)
+    .innerJoin(itemsVentaTable, eq(itemsVentaTable.ventaId, ventasTable.id))
+    .where(gte(ventasTable.fecha, inicio))
+    .groupBy(ventasTable.vendedor);
+
+  const totalVentas = Number(resumenVentas?.totalVentas ?? 0);
+  const totalGanancia = Number(resumenVentas?.totalGanancia ?? 0);
+  const totalCosto = Number(costoRows[0]?.costoTotal ?? 0);
+
+  const lines: string[] = [];
+  const fmt = (n: number) => n.toFixed(2);
+
+  lines.push(`"CIERRE DE MES — ${mes.toUpperCase()}"`);
+  lines.push(`"Generado el","${now.toLocaleDateString("es-AR")} ${now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}"`);
+  lines.push("");
+  lines.push('"RESUMEN GENERAL"');
+  lines.push(`"Total vendido","${fmt(totalVentas)}"`);
+  lines.push(`"Total costo productos","${fmt(totalCosto)}"`);
+  lines.push(`"Ganancia neta","${fmt(totalGanancia)}"`);
+  lines.push(`"Cantidad de ventas","${resumenVentas?.cantidadVentas ?? 0}"`);
+  lines.push("");
+  lines.push('"POR VENDEDOR"');
+  lines.push('"Vendedor","Ventas realizadas","Total vendido","Costo","Ganancia"');
+  for (const v of vendedorRows) {
+    lines.push(`"${v.vendedor}","${v.cantidadVentas}","${fmt(Number(v.totalVentas))}","${fmt(Number(v.costoTotal))}","${fmt(Number(v.ganancia))}"`);
+  }
+  lines.push("");
+  lines.push('"POR PROVEEDOR"');
+  lines.push('"Proveedor","Producto","Cantidad","Costo total","Vendido","Ganancia"');
+
+  let currentProv = "";
+  let provCosto = 0, provIngresos = 0, provGanancia = 0;
+  for (const r of proveedorRows) {
+    const prov = r.proveedorNombre ?? "Sin proveedor";
+    if (prov !== currentProv) {
+      if (currentProv) {
+        lines.push(`"SUBTOTAL ${currentProv}","","","${fmt(provCosto)}","${fmt(provIngresos)}","${fmt(provGanancia)}"`);
+        lines.push("");
+      }
+      currentProv = prov;
+      provCosto = 0; provIngresos = 0; provGanancia = 0;
+    }
+    const c = Number(r.costoTotal ?? 0), ing = Number(r.ingresos ?? 0), gan = Number(r.ganancia ?? 0);
+    provCosto += c; provIngresos += ing; provGanancia += gan;
+    lines.push(`"${prov}","${r.productoNombre}","${r.cantidad}","${fmt(c)}","${fmt(ing)}","${fmt(gan)}"`);
+  }
+  if (currentProv) {
+    lines.push(`"SUBTOTAL ${currentProv}","","","${fmt(provCosto)}","${fmt(provIngresos)}","${fmt(provGanancia)}"`);
+  }
+  lines.push("");
+  lines.push(`"TOTAL GENERAL","","","${fmt(totalCosto)}","${fmt(totalVentas)}","${fmt(totalGanancia)}"`);
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="cierre-mes-${mesSlug}.csv"`);
+  return res.send("\uFEFF" + lines.join("\n"));
+});
+
 router.get("/stock-bajo", async (req, res) => {
   const productos = await db
     .select()

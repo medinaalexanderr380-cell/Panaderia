@@ -106,14 +106,20 @@ router.delete("/dia/:fecha", async (req, res) => {
     .where(sql`DATE(${ventasTable.fecha}) = ${fecha}`);
 
   for (const venta of ventasDia) {
-    // Restore stock for each item
     const items = await db.select().from(itemsVentaTable).where(eq(itemsVentaTable.ventaId, venta.id));
     for (const item of items) {
       const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, item.productoCodigo));
       if (producto) {
-        await db.update(productosTable)
-          .set({ stock: producto.stock + item.cantidad, actualizadoEn: new Date() })
-          .where(eq(productosTable.codigo, item.productoCodigo));
+        if (venta.origen === "camioneta") {
+          const v = venta.vendedor.toLowerCase();
+          if (v === "michel") {
+            await db.update(productosTable).set({ stockCamionetaMichel: sql`${productosTable.stockCamionetaMichel} + ${item.cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, item.productoCodigo));
+          } else if (v === "david") {
+            await db.update(productosTable).set({ stockCamionetaDavid: sql`${productosTable.stockCamionetaDavid} + ${item.cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, item.productoCodigo));
+          }
+        } else {
+          await db.update(productosTable).set({ stock: producto.stock + item.cantidad, actualizadoEn: new Date() }).where(eq(productosTable.codigo, item.productoCodigo));
+        }
       }
     }
     await db.delete(itemsVentaTable).where(eq(itemsVentaTable.ventaId, venta.id));
@@ -241,14 +247,20 @@ router.delete("/:id", async (req, res) => {
   const [venta] = await db.select().from(ventasTable).where(eq(ventasTable.id, id));
   if (!venta) return res.status(404).json({ error: "Venta no encontrada" });
 
-  // Restore stock
   const items = await db.select().from(itemsVentaTable).where(eq(itemsVentaTable.ventaId, id));
   for (const item of items) {
     const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, item.productoCodigo));
     if (producto) {
-      await db.update(productosTable)
-        .set({ stock: producto.stock + item.cantidad, actualizadoEn: new Date() })
-        .where(eq(productosTable.codigo, item.productoCodigo));
+      if (venta.origen === "camioneta") {
+        const v = venta.vendedor.toLowerCase();
+        if (v === "michel") {
+          await db.update(productosTable).set({ stockCamionetaMichel: sql`${productosTable.stockCamionetaMichel} + ${item.cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, item.productoCodigo));
+        } else if (v === "david") {
+          await db.update(productosTable).set({ stockCamionetaDavid: sql`${productosTable.stockCamionetaDavid} + ${item.cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, item.productoCodigo));
+        }
+      } else {
+        await db.update(productosTable).set({ stock: producto.stock + item.cantidad, actualizadoEn: new Date() }).where(eq(productosTable.codigo, item.productoCodigo));
+      }
     }
   }
 
