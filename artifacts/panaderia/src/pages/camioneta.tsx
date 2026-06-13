@@ -782,21 +782,26 @@ export default function Camioneta() {
   const [credCaducadoOpen, setCredCaducadoOpen] = useState(false);
   const [credCaducadoError, setCredCaducadoError] = useState("");
   const [verifyingCaducado, setVerifyingCaducado] = useState(false);
+  // Guardamos el item pendiente en estado separado para que no se pierda cuando
+  // el AlertDialog se cierra automáticamente al hacer click en AlertDialogAction
+  const [pendingCaducado, setPendingCaducado] = useState<{ codigo: string; cantidad: number } | null>(null);
 
   const caducadoMutation = useCaducadoMutation(vendedorSeleccionado ?? "michel", () => {
     toast({ title: "Pérdida registrada correctamente" });
+    setPendingCaducado(null);
     setCaducadoDialog(null);
     setCaducadoCantidad(1);
   });
 
   const handleCaducadoVerify = async (password: string) => {
+    if (!pendingCaducado) return;
     setVerifyingCaducado(true);
     setCredCaducadoError("");
     const result = await verificarCredenciales(vendedorSeleccionado!, password);
     setVerifyingCaducado(false);
     if (!result.ok) { setCredCaducadoError(result.error!); return; }
     setCredCaducadoOpen(false);
-    caducadoMutation.mutate({ productoCodigo: caducadoDialog!.codigo, cantidad: Number(caducadoCantidad) });
+    caducadoMutation.mutate(pendingCaducado);
   };
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
@@ -903,6 +908,8 @@ export default function Camioneta() {
                   toast({ title: "Cantidad inválida", variant: "destructive" });
                   return;
                 }
+                // Guardamos el item ANTES de que el AlertDialog limpie caducadoDialog
+                setPendingCaducado({ codigo: caducadoDialog!.codigo, cantidad: Number(caducadoCantidad) });
                 setCredCaducadoError("");
                 setCredCaducadoOpen(true);
               }}

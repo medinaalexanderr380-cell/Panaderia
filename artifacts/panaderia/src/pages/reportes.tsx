@@ -37,6 +37,21 @@ interface ProveedorDetalle {
   productos: { codigo: string; nombre: string; cantidad: number; costoTotal: number; ingresos: number; ganancia: number }[];
 }
 
+interface ProveedorPorDia {
+  proveedorNombre: string;
+  costoTotal: number;
+  ingresos: number;
+  ganancia: number;
+  productos: { nombre: string; cantidad: number; costoTotal: number; ingresos: number; ganancia: number }[];
+}
+interface DiaPorProveedor {
+  fecha: string;
+  totalVendido: number;
+  totalCosto: number;
+  totalGanancia: number;
+  proveedores: ProveedorPorDia[];
+}
+
 interface CierreMes {
   mes: string;
   totalVentas: number;
@@ -67,10 +82,17 @@ export default function Reportes() {
     queryFn: () => fetch("/api/reportes/cierre-mes", { credentials: "include" }).then(r => r.json()),
     refetchInterval: 60000,
   });
+  const { data: porDia } = useQuery<DiaPorProveedor[]>({
+    queryKey: ["reportes", "proveedores-por-dia"],
+    queryFn: () => fetch("/api/reportes/proveedores-por-dia", { credentials: "include" }).then(r => r.json()),
+    refetchInterval: 30000,
+  });
 
   const [expandido, setExpandido] = useState<string | null>(null);
   const [expandidoProv, setExpandidoProv] = useState<string | null>(null);
   const [expandidoCierre, setExpandidoCierre] = useState(false);
+  const [expandidoDia, setExpandidoDia] = useState<string | null>(null);
+  const [expandidoDiaProv, setExpandidoDiaProv] = useState<string | null>(null);
 
   const descargarCierreMes = () => {
     const a = document.createElement("a");
@@ -238,11 +260,12 @@ export default function Reportes() {
       </Card>
 
       <Tabs defaultValue="ventas" className="w-full">
-        <TabsList className="grid w-full md:w-[530px] grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="ventas">Ventas</TabsTrigger>
           <TabsTrigger value="productos">Productos</TabsTrigger>
           <TabsTrigger value="equipo">Equipo</TabsTrigger>
           <TabsTrigger value="proveedores">Proveedores</TabsTrigger>
+          <TabsTrigger value="pordia">Por Día</TabsTrigger>
         </TabsList>
         
         <TabsContent value="ventas" className="pt-6">
@@ -569,6 +592,124 @@ export default function Reportes() {
                         </TableBody>
                       </Table>
                     </div>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </TabsContent>
+
+        <TabsContent value="pordia" className="pt-6 space-y-4">
+          <p className="text-sm text-muted-foreground">Desglose diario por proveedor — cuánto vendiste y cuánto le tenés que pagar a cada uno por día.</p>
+          {!porDia || porDia.length === 0 ? (
+            <Card><CardContent className="py-12 text-center text-muted-foreground">Sin ventas registradas en los últimos 30 días</CardContent></Card>
+          ) : porDia.map(dia => {
+            const abierto = expandidoDia === dia.fecha;
+            const fechaLabel = (() => {
+              try { return format(parseISO(dia.fecha), "EEEE d 'de' MMMM", { locale: es }); } catch { return dia.fecha; }
+            })();
+            return (
+              <Card key={dia.fecha} className="overflow-hidden">
+                {/* Cabecera del día */}
+                <button
+                  className="w-full p-5 flex flex-col sm:flex-row sm:items-center gap-4 text-left hover:bg-muted/30 transition-colors"
+                  onClick={() => { setExpandidoDia(abierto ? null : dia.fecha); setExpandidoDiaProv(null); }}
+                >
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="w-11 h-11 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                      <CalendarDays className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-base capitalize">{fechaLabel}</p>
+                      <p className="text-xs text-muted-foreground">{dia.proveedores.length} proveedor{dia.proveedores.length !== 1 ? "es" : ""}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
+                      <TrendingUp className="w-4 h-4 text-primary shrink-0" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Vendí</p>
+                        <p className="font-bold text-sm text-primary">{formatCurrency(dia.totalVendido)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      <ShoppingBag className="w-4 h-4 text-red-500 shrink-0" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">A pagar</p>
+                        <p className="font-bold text-sm text-red-700">{formatCurrency(dia.totalCosto)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                      <TrendingUp className="w-4 h-4 text-green-600 shrink-0" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Me queda</p>
+                        <p className="font-bold text-sm text-green-700">{formatCurrency(dia.totalGanancia)}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-muted-foreground ml-2 shrink-0">
+                    {abierto ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </span>
+                </button>
+
+                {/* Detalle: un card por proveedor */}
+                {abierto && (
+                  <div className="border-t divide-y">
+                    {dia.proveedores.map(prov => {
+                      const provKey = `${dia.fecha}-${prov.proveedorNombre}`;
+                      const provAbierto = expandidoDiaProv === provKey;
+                      return (
+                        <div key={prov.proveedorNombre} className="p-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                            <div className="flex items-center gap-2 flex-1">
+                              <Truck className="w-4 h-4 text-amber-600 shrink-0" />
+                              <span className="font-medium text-sm">{prov.proveedorNombre}</span>
+                              <span className="text-xs text-muted-foreground">({prov.productos.length} prod.)</span>
+                            </div>
+                            <div className="flex gap-2 flex-wrap text-xs">
+                              <span className="bg-red-50 border border-red-200 text-red-700 font-semibold rounded px-2 py-1">
+                                Pagar: {formatCurrency(prov.costoTotal)}
+                              </span>
+                              <span className="bg-green-50 border border-green-200 text-green-700 font-semibold rounded px-2 py-1">
+                                Queda: {formatCurrency(prov.ganancia)}
+                              </span>
+                            </div>
+                            <button
+                              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 shrink-0"
+                              onClick={() => setExpandidoDiaProv(provAbierto ? null : provKey)}
+                            >
+                              {provAbierto ? <><ChevronUp className="w-3.5 h-3.5" /> Ocultar</> : <><ChevronDown className="w-3.5 h-3.5" /> Ver productos</>}
+                            </button>
+                          </div>
+                          {provAbierto && (
+                            <div className="mt-3 overflow-x-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Producto</TableHead>
+                                    <TableHead className="text-right">Cant.</TableHead>
+                                    <TableHead className="text-right">Costo</TableHead>
+                                    <TableHead className="text-right">Vendido</TableHead>
+                                    <TableHead className="text-right">Me queda</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {prov.productos.map((p, i) => (
+                                    <TableRow key={i}>
+                                      <TableCell className="font-medium">{p.nombre}</TableCell>
+                                      <TableCell className="text-right">{p.cantidad}</TableCell>
+                                      <TableCell className="text-right text-red-700">{formatCurrency(p.costoTotal)}</TableCell>
+                                      <TableCell className="text-right">{formatCurrency(p.ingresos)}</TableCell>
+                                      <TableCell className="text-right text-green-700 font-medium">{formatCurrency(p.ganancia)}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </Card>

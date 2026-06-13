@@ -267,6 +267,64 @@ router.get("/por-proveedor", async (req, res) => {
   return res.json(Array.from(proveedoresMap.values()));
 });
 
+router.get("/proveedores-por-dia", async (req, res) => {
+  const rows = await db
+    .select({
+      fecha: sql<string>`DATE(${ventasTable.fecha})`,
+      proveedorNombre: proveedoresTable.nombre,
+      productoCodigo: itemsVentaTable.productoCodigo,
+      productoNombre: itemsVentaTable.productoNombre,
+      cantidad: sql<number>`sum(${itemsVentaTable.cantidad})`,
+      costoTotal: sql<number>`sum(${itemsVentaTable.precioCosto}::numeric * ${itemsVentaTable.cantidad})`,
+      ingresos: sql<number>`sum(${itemsVentaTable.subtotal}::numeric)`,
+      ganancia: sql<number>`sum((${itemsVentaTable.precioUnitario}::numeric - ${itemsVentaTable.precioCosto}::numeric) * ${itemsVentaTable.cantidad})`,
+    })
+    .from(itemsVentaTable)
+    .innerJoin(ventasTable, eq(itemsVentaTable.ventaId, ventasTable.id))
+    .innerJoin(productosTable, eq(itemsVentaTable.productoCodigo, productosTable.codigo))
+    .leftJoin(proveedoresTable, eq(productosTable.proveedorId, proveedoresTable.id))
+    .where(gte(ventasTable.fecha, new Date(Date.now() - 30 * 86400000)))
+    .groupBy(sql`DATE(${ventasTable.fecha})`, proveedoresTable.nombre, itemsVentaTable.productoCodigo, itemsVentaTable.productoNombre)
+    .orderBy(desc(sql`DATE(${ventasTable.fecha})`), proveedoresTable.nombre);
+
+  type DiaEntry = {
+    fecha: string;
+    totalVendido: number;
+    totalCosto: number;
+    totalGanancia: number;
+    proveedores: Map<string, { proveedorNombre: string; costoTotal: number; ingresos: number; ganancia: number; productos: { nombre: string; cantidad: number; costoTotal: number; ingresos: number; ganancia: number }[] }>;
+  };
+
+  const diasMap = new Map<string, DiaEntry>();
+
+  for (const r of rows) {
+    const fecha = r.fecha;
+    if (!diasMap.has(fecha)) {
+      diasMap.set(fecha, { fecha, totalVendido: 0, totalCosto: 0, totalGanancia: 0, proveedores: new Map() });
+    }
+    const dia = diasMap.get(fecha)!;
+    const prov = r.proveedorNombre ?? "Sin proveedor";
+    if (!dia.proveedores.has(prov)) {
+      dia.proveedores.set(prov, { proveedorNombre: prov, costoTotal: 0, ingresos: 0, ganancia: 0, productos: [] });
+    }
+    const pe = dia.proveedores.get(prov)!;
+    const c = Number(r.costoTotal ?? 0), ing = Number(r.ingresos ?? 0), gan = Number(r.ganancia ?? 0);
+    pe.costoTotal += c; pe.ingresos += ing; pe.ganancia += gan;
+    pe.productos.push({ nombre: r.productoNombre, cantidad: Number(r.cantidad), costoTotal: c, ingresos: ing, ganancia: gan });
+    dia.totalVendido += ing; dia.totalCosto += c; dia.totalGanancia += gan;
+  }
+
+  const result = Array.from(diasMap.values()).map(d => ({
+    fecha: d.fecha,
+    totalVendido: d.totalVendido,
+    totalCosto: d.totalCosto,
+    totalGanancia: d.totalGanancia,
+    proveedores: Array.from(d.proveedores.values()),
+  }));
+
+  return res.json(result);
+});
+
 router.get("/cierre-mes", async (req, res) => {
   const inicio = inicioMesActual();
   const now = new Date();
