@@ -784,7 +784,7 @@ export default function Camioneta() {
   const [verifyingCaducado, setVerifyingCaducado] = useState(false);
   // Guardamos el item pendiente en estado separado para que no se pierda cuando
   // el AlertDialog se cierra automáticamente al hacer click en AlertDialogAction
-  const [pendingCaducado, setPendingCaducado] = useState<{ codigo: string; cantidad: number } | null>(null);
+  const [pendingCaducado, setPendingCaducado] = useState<{ productoCodigo: string; cantidad: number } | null>(null);
 
   const caducadoMutation = useCaducadoMutation(vendedorSeleccionado ?? "michel", () => {
     toast({ title: "Pérdida registrada correctamente" });
@@ -909,7 +909,7 @@ export default function Camioneta() {
                   return;
                 }
                 // Guardamos el item ANTES de que el AlertDialog limpie caducadoDialog
-                setPendingCaducado({ codigo: caducadoDialog!.codigo, cantidad: Number(caducadoCantidad) });
+                setPendingCaducado({ productoCodigo: caducadoDialog!.codigo, cantidad: Number(caducadoCantidad) });
                 setCredCaducadoError("");
                 setCredCaducadoOpen(true);
               }}
