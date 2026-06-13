@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { ventasTable, itemsVentaTable, comprasTable, productosTable, proveedoresTable } from "@workspace/db";
+import { ventasTable, itemsVentaTable, comprasTable, productosTable, proveedoresTable, gastosTable } from "@workspace/db";
 import { eq, gte, lte, and, sql, desc, SQL } from "drizzle-orm";
 import { ObtenerResumenQueryParams, ObtenerVentasPorDiaQueryParams } from "@workspace/api-zod";
 
@@ -268,30 +268,45 @@ router.get("/por-proveedor", async (req, res) => {
 });
 
 router.get("/proveedores-por-dia", async (req, res) => {
-  const rows = await db
-    .select({
-      fecha: sql<string>`DATE(${ventasTable.fecha})`,
-      proveedorNombre: proveedoresTable.nombre,
-      productoCodigo: itemsVentaTable.productoCodigo,
-      productoNombre: itemsVentaTable.productoNombre,
-      cantidad: sql<number>`sum(${itemsVentaTable.cantidad})`,
-      costoTotal: sql<number>`sum(${itemsVentaTable.precioCosto}::numeric * ${itemsVentaTable.cantidad})`,
-      ingresos: sql<number>`sum(${itemsVentaTable.subtotal}::numeric)`,
-      ganancia: sql<number>`sum((${itemsVentaTable.precioUnitario}::numeric - ${itemsVentaTable.precioCosto}::numeric) * ${itemsVentaTable.cantidad})`,
-    })
-    .from(itemsVentaTable)
-    .innerJoin(ventasTable, eq(itemsVentaTable.ventaId, ventasTable.id))
-    .innerJoin(productosTable, eq(itemsVentaTable.productoCodigo, productosTable.codigo))
-    .leftJoin(proveedoresTable, eq(productosTable.proveedorId, proveedoresTable.id))
-    .where(gte(ventasTable.fecha, new Date(Date.now() - 30 * 86400000)))
-    .groupBy(sql`DATE(${ventasTable.fecha})`, proveedoresTable.nombre, itemsVentaTable.productoCodigo, itemsVentaTable.productoNombre)
-    .orderBy(desc(sql`DATE(${ventasTable.fecha})`), proveedoresTable.nombre);
+  const limite = new Date(Date.now() - 30 * 86400000);
+  const [rows, gastosRows] = await Promise.all([
+    db
+      .select({
+        fecha: sql<string>`DATE(${ventasTable.fecha})`,
+        proveedorNombre: proveedoresTable.nombre,
+        productoCodigo: itemsVentaTable.productoCodigo,
+        productoNombre: itemsVentaTable.productoNombre,
+        cantidad: sql<number>`sum(${itemsVentaTable.cantidad})`,
+        costoTotal: sql<number>`sum(${itemsVentaTable.precioCosto}::numeric * ${itemsVentaTable.cantidad})`,
+        ingresos: sql<number>`sum(${itemsVentaTable.subtotal}::numeric)`,
+        ganancia: sql<number>`sum((${itemsVentaTable.precioUnitario}::numeric - ${itemsVentaTable.precioCosto}::numeric) * ${itemsVentaTable.cantidad})`,
+      })
+      .from(itemsVentaTable)
+      .innerJoin(ventasTable, eq(itemsVentaTable.ventaId, ventasTable.id))
+      .innerJoin(productosTable, eq(itemsVentaTable.productoCodigo, productosTable.codigo))
+      .leftJoin(proveedoresTable, eq(productosTable.proveedorId, proveedoresTable.id))
+      .where(gte(ventasTable.fecha, limite))
+      .groupBy(sql`DATE(${ventasTable.fecha})`, proveedoresTable.nombre, itemsVentaTable.productoCodigo, itemsVentaTable.productoNombre)
+      .orderBy(desc(sql`DATE(${ventasTable.fecha})`), proveedoresTable.nombre),
+    db
+      .select({
+        fecha: sql<string>`DATE(${gastosTable.fecha})`,
+        totalGastos: sql<number>`sum(${gastosTable.monto}::numeric)`,
+        gastos: sql<string>`json_agg(json_build_object('id', ${gastosTable.id}, 'descripcion', ${gastosTable.descripcion}, 'monto', ${gastosTable.monto}::numeric) ORDER BY ${gastosTable.fecha})`,
+      })
+      .from(gastosTable)
+      .where(gte(gastosTable.fecha, limite))
+      .groupBy(sql`DATE(${gastosTable.fecha})`),
+  ]);
 
   type DiaEntry = {
     fecha: string;
     totalVendido: number;
     totalCosto: number;
     totalGanancia: number;
+    totalGastos: number;
+    gananciaReal: number;
+    gastos: { id: number; descripcion: string; monto: number }[];
     proveedores: Map<string, { proveedorNombre: string; costoTotal: number; ingresos: number; ganancia: number; productos: { nombre: string; cantidad: number; costoTotal: number; ingresos: number; ganancia: number }[] }>;
   };
 
@@ -300,7 +315,7 @@ router.get("/proveedores-por-dia", async (req, res) => {
   for (const r of rows) {
     const fecha = r.fecha;
     if (!diasMap.has(fecha)) {
-      diasMap.set(fecha, { fecha, totalVendido: 0, totalCosto: 0, totalGanancia: 0, proveedores: new Map() });
+      diasMap.set(fecha, { fecha, totalVendido: 0, totalCosto: 0, totalGanancia: 0, totalGastos: 0, gananciaReal: 0, gastos: [], proveedores: new Map() });
     }
     const dia = diasMap.get(fecha)!;
     const prov = r.proveedorNombre ?? "Sin proveedor";
@@ -314,15 +329,86 @@ router.get("/proveedores-por-dia", async (req, res) => {
     dia.totalVendido += ing; dia.totalCosto += c; dia.totalGanancia += gan;
   }
 
-  const result = Array.from(diasMap.values()).map(d => ({
-    fecha: d.fecha,
-    totalVendido: d.totalVendido,
-    totalCosto: d.totalCosto,
-    totalGanancia: d.totalGanancia,
-    proveedores: Array.from(d.proveedores.values()),
-  }));
+  // Inyectar gastos del día en cada entrada
+  for (const g of gastosRows) {
+    const fecha = g.fecha;
+    if (!diasMap.has(fecha)) {
+      diasMap.set(fecha, { fecha, totalVendido: 0, totalCosto: 0, totalGanancia: 0, totalGastos: 0, gananciaReal: 0, gastos: [], proveedores: new Map() });
+    }
+    const dia = diasMap.get(fecha)!;
+    dia.totalGastos = Number(g.totalGastos ?? 0);
+    dia.gastos = typeof g.gastos === "string" ? JSON.parse(g.gastos) : (g.gastos as unknown as { id: number; descripcion: string; monto: number }[]) ?? [];
+  }
+
+  // Ordenar por fecha desc y calcular gananciaReal
+  const result = Array.from(diasMap.values())
+    .sort((a, b) => b.fecha.localeCompare(a.fecha))
+    .map(d => ({
+      fecha: d.fecha,
+      totalVendido: d.totalVendido,
+      totalCosto: d.totalCosto,
+      totalGanancia: d.totalGanancia,
+      totalGastos: d.totalGastos,
+      gananciaReal: d.totalGanancia - d.totalGastos,
+      gastos: d.gastos,
+      proveedores: Array.from(d.proveedores.values()),
+    }));
 
   return res.json(result);
+});
+
+// CSV export por día específico
+router.get("/proveedores-por-dia/:fecha/exportar", async (req, res) => {
+  const fecha = req.params.fecha; // YYYY-MM-DD
+  const fechaInicio = new Date(`${fecha}T00:00:00`);
+  const fechaFin = new Date(`${fecha}T23:59:59`);
+
+  const [rows, gastosRows] = await Promise.all([
+    db
+      .select({
+        proveedorNombre: proveedoresTable.nombre,
+        productoNombre: itemsVentaTable.productoNombre,
+        cantidad: sql<number>`sum(${itemsVentaTable.cantidad})`,
+        costoTotal: sql<number>`sum(${itemsVentaTable.precioCosto}::numeric * ${itemsVentaTable.cantidad})`,
+        ingresos: sql<number>`sum(${itemsVentaTable.subtotal}::numeric)`,
+        ganancia: sql<number>`sum((${itemsVentaTable.precioUnitario}::numeric - ${itemsVentaTable.precioCosto}::numeric) * ${itemsVentaTable.cantidad})`,
+      })
+      .from(itemsVentaTable)
+      .innerJoin(ventasTable, eq(itemsVentaTable.ventaId, ventasTable.id))
+      .innerJoin(productosTable, eq(itemsVentaTable.productoCodigo, productosTable.codigo))
+      .leftJoin(proveedoresTable, eq(productosTable.proveedorId, proveedoresTable.id))
+      .where(and(gte(ventasTable.fecha, fechaInicio), lte(ventasTable.fecha, fechaFin)))
+      .groupBy(proveedoresTable.nombre, itemsVentaTable.productoNombre)
+      .orderBy(proveedoresTable.nombre),
+    db.select().from(gastosTable).where(and(gte(gastosTable.fecha, fechaInicio), lte(gastosTable.fecha, fechaFin))),
+  ]);
+
+  const bom = "\uFEFF";
+  const lines: string[] = [bom + "Proveedor,Producto,Cantidad,Costo Total,Vendido,Ganancia"];
+  let totVendido = 0, totCosto = 0, totGanancia = 0;
+  for (const r of rows) {
+    const c = Number(r.costoTotal ?? 0), ing = Number(r.ingresos ?? 0), gan = Number(r.ganancia ?? 0);
+    totVendido += ing; totCosto += c; totGanancia += gan;
+    lines.push(`"${r.proveedorNombre ?? "Sin proveedor"}","${r.productoNombre}",${r.cantidad},${c.toFixed(2)},${ing.toFixed(2)},${gan.toFixed(2)}`);
+  }
+  lines.push(`TOTAL,,, ${totCosto.toFixed(2)},${totVendido.toFixed(2)},${totGanancia.toFixed(2)}`);
+  if (gastosRows.length > 0) {
+    lines.push("");
+    lines.push("Gastos del día");
+    lines.push("Descripción,Monto");
+    let totGastos = 0;
+    for (const g of gastosRows) {
+      const m = Number(g.monto ?? 0);
+      totGastos += m;
+      lines.push(`"${g.descripcion}",${m.toFixed(2)}`);
+    }
+    lines.push(`TOTAL GASTOS,${totGastos.toFixed(2)}`);
+    lines.push(`GANANCIA REAL,${(totGanancia - totGastos).toFixed(2)}`);
+  }
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="dia-${fecha}.csv"`);
+  return res.send(lines.join("\r\n"));
 });
 
 router.get("/cierre-mes", async (req, res) => {

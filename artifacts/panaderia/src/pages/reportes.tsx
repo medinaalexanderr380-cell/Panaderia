@@ -11,7 +11,7 @@ import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Cart
 import { formatCurrency } from "@/lib/format";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
-import { BarChart as BarChartIcon, TrendingUp, Users, ChevronDown, ChevronUp, CalendarDays, Package, ShoppingBag, Truck, Download, FileSpreadsheet } from "lucide-react";
+import { BarChart as BarChartIcon, TrendingUp, Users, ChevronDown, ChevronUp, CalendarDays, Package, ShoppingBag, Truck, Download, FileSpreadsheet, Receipt } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,9 @@ interface DiaPorProveedor {
   totalVendido: number;
   totalCosto: number;
   totalGanancia: number;
+  totalGastos: number;
+  gananciaReal: number;
+  gastos: { id: number; descripcion: string; monto: number }[];
   proveedores: ProveedorPorDia[];
 }
 
@@ -600,61 +603,111 @@ export default function Reportes() {
         </TabsContent>
 
         <TabsContent value="pordia" className="pt-6 space-y-4">
-          <p className="text-sm text-muted-foreground">Desglose diario por proveedor — cuánto vendiste y cuánto le tenés que pagar a cada uno por día.</p>
+          <p className="text-sm text-muted-foreground">Desglose diario — ventas por proveedor y gastos del día descontados de tus ganancias.</p>
           {!porDia || porDia.length === 0 ? (
-            <Card><CardContent className="py-12 text-center text-muted-foreground">Sin ventas registradas en los últimos 30 días</CardContent></Card>
+            <Card><CardContent className="py-12 text-center text-muted-foreground">Sin ventas ni gastos registrados en los últimos 30 días</CardContent></Card>
           ) : porDia.map(dia => {
             const abierto = expandidoDia === dia.fecha;
+            const tieneGastos = dia.totalGastos > 0;
             const fechaLabel = (() => {
               try { return format(parseISO(dia.fecha), "EEEE d 'de' MMMM", { locale: es }); } catch { return dia.fecha; }
             })();
             return (
               <Card key={dia.fecha} className="overflow-hidden">
                 {/* Cabecera del día */}
-                <button
-                  className="w-full p-5 flex flex-col sm:flex-row sm:items-center gap-4 text-left hover:bg-muted/30 transition-colors"
-                  onClick={() => { setExpandidoDia(abierto ? null : dia.fecha); setExpandidoDiaProv(null); }}
-                >
-                  <div className="flex items-center gap-3 flex-1">
+                <div className="p-5 flex flex-col sm:flex-row sm:items-start gap-4">
+                  <button
+                    className="flex items-center gap-3 flex-1 text-left"
+                    onClick={() => { setExpandidoDia(abierto ? null : dia.fecha); setExpandidoDiaProv(null); }}
+                  >
                     <div className="w-11 h-11 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
                       <CalendarDays className="w-5 h-5 text-blue-600" />
                     </div>
                     <div>
                       <p className="font-semibold text-base capitalize">{fechaLabel}</p>
-                      <p className="text-xs text-muted-foreground">{dia.proveedores.length} proveedor{dia.proveedores.length !== 1 ? "es" : ""}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {dia.proveedores.length} proveedor{dia.proveedores.length !== 1 ? "es" : ""}
+                        {tieneGastos && <span className="text-orange-600 ml-2">· {dia.gastos.length} gasto{dia.gastos.length !== 1 ? "s" : ""}</span>}
+                      </p>
                     </div>
-                  </div>
-                  <div className="flex gap-2 flex-wrap">
-                    <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
-                      <TrendingUp className="w-4 h-4 text-primary shrink-0" />
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Vendí</p>
-                        <p className="font-bold text-sm text-primary">{formatCurrency(dia.totalVendido)}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                      <ShoppingBag className="w-4 h-4 text-red-500 shrink-0" />
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">A pagar</p>
-                        <p className="font-bold text-sm text-red-700">{formatCurrency(dia.totalCosto)}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                      <TrendingUp className="w-4 h-4 text-green-600 shrink-0" />
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Me queda</p>
-                        <p className="font-bold text-sm text-green-700">{formatCurrency(dia.totalGanancia)}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-muted-foreground ml-2 shrink-0">
-                    {abierto ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  </span>
-                </button>
+                  </button>
 
-                {/* Detalle: un card por proveedor */}
+                  <div className="flex flex-col gap-2 sm:items-end">
+                    <div className="flex gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
+                        <TrendingUp className="w-4 h-4 text-primary shrink-0" />
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Vendí</p>
+                          <p className="font-bold text-sm text-primary">{formatCurrency(dia.totalVendido)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                        <ShoppingBag className="w-4 h-4 text-red-500 shrink-0" />
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">A pagar prov.</p>
+                          <p className="font-bold text-sm text-red-700">{formatCurrency(dia.totalCosto)}</p>
+                        </div>
+                      </div>
+                      {tieneGastos && (
+                        <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                          <Receipt className="w-4 h-4 text-orange-500 shrink-0" />
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Gastos</p>
+                            <p className="font-bold text-sm text-orange-700">{formatCurrency(dia.totalGastos)}</p>
+                          </div>
+                        </div>
+                      )}
+                      <div className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${tieneGastos ? "bg-emerald-50 border-emerald-300" : "bg-green-50 border-green-200"}`}>
+                        <TrendingUp className={`w-4 h-4 shrink-0 ${tieneGastos ? "text-emerald-600" : "text-green-600"}`} />
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{tieneGastos ? "Me queda (real)" : "Me queda"}</p>
+                          <p className={`font-bold text-sm ${tieneGastos ? "text-emerald-700" : "text-green-700"}`}>{formatCurrency(dia.gananciaReal)}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm" variant="outline"
+                        className="gap-1.5 text-xs h-7"
+                        onClick={e => { e.stopPropagation(); const a = document.createElement("a"); a.href = `/api/reportes/proveedores-por-dia/${dia.fecha}/exportar`; a.download = ""; document.body.appendChild(a); a.click(); document.body.removeChild(a); }}
+                      >
+                        <Download className="w-3 h-3" /> CSV
+                      </Button>
+                      <button
+                        className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 shrink-0"
+                        onClick={() => { setExpandidoDia(abierto ? null : dia.fecha); setExpandidoDiaProv(null); }}
+                      >
+                        {abierto ? <><ChevronUp className="w-4 h-4" /> Ocultar</> : <><ChevronDown className="w-4 h-4" /> Ver detalle</>}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Detalle expandido */}
                 {abierto && (
                   <div className="border-t divide-y">
+                    {/* Gastos del día */}
+                    {tieneGastos && (
+                      <div className="p-4 bg-orange-50/50">
+                        <p className="text-sm font-semibold text-orange-700 mb-2 flex items-center gap-1.5">
+                          <Receipt className="w-4 h-4" /> Gastos del día
+                        </p>
+                        <div className="space-y-1">
+                          {dia.gastos.map((g, i) => (
+                            <div key={i} className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">{g.descripcion}</span>
+                              <span className="font-semibold text-orange-700">{formatCurrency(Number(g.monto))}</span>
+                            </div>
+                          ))}
+                          <div className="flex justify-between text-sm border-t pt-1 mt-1 font-bold text-orange-800">
+                            <span>Total gastos</span>
+                            <span>{formatCurrency(dia.totalGastos)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Proveedores */}
                     {dia.proveedores.map(prov => {
                       const provKey = `${dia.fecha}-${prov.proveedorNombre}`;
                       const provAbierto = expandidoDiaProv === provKey;

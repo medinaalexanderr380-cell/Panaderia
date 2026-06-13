@@ -14,6 +14,7 @@ import Reportes from "@/pages/reportes";
 import Camioneta from "@/pages/camioneta";
 import Usuarios from "@/pages/usuarios";
 import Perdidas from "@/pages/perdidas";
+import Gastos from "@/pages/gastos";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1 } },
@@ -36,6 +37,7 @@ function App() {
               <Route path="/camioneta" component={Camioneta} />
               <Route path="/usuarios" component={Usuarios} />
               <Route path="/perdidas" component={Perdidas} />
+              <Route path="/gastos" component={Gastos} />
               <Route component={NotFound} />
             </Switch>
             </ErrorBoundary>
