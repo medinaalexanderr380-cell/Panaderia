@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend } from "recharts";
 import { formatCurrency } from "@/lib/format";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, subDays, startOfMonth, startOfWeek } from "date-fns";
 import { es } from "date-fns/locale";
 import { BarChart as BarChartIcon, TrendingUp, Users, ChevronDown, ChevronUp, CalendarDays, Package, ShoppingBag, Truck, Download, FileSpreadsheet, Receipt } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -93,6 +93,7 @@ export default function Reportes() {
 
   const [expandido, setExpandido] = useState<string | null>(null);
   const [expandidoProv, setExpandidoProv] = useState<string | null>(null);
+  const [filtroHistorial, setFiltroHistorial] = useState<"semana" | "mes" | "30d">("30d");
   const [expandidoCierre, setExpandidoCierre] = useState(false);
   const [expandidoDia, setExpandidoDia] = useState<string | null>(null);
   const [expandidoDiaProv, setExpandidoDiaProv] = useState<string | null>(null);
@@ -510,59 +511,92 @@ export default function Reportes() {
         <TabsContent value="proveedores" className="pt-6 space-y-6">
 
           {/* ── Historial por día ── */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <CalendarDays className="w-4 h-4 text-primary" /> Historial por día
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {!porDia || porDia.length === 0 ? (
-                <p className="px-6 pb-5 text-sm text-muted-foreground">Sin ventas registradas en los últimos 30 días</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Día</TableHead>
-                        <TableHead className="text-right">Vendí</TableHead>
-                        <TableHead className="text-right">Costo a pagar</TableHead>
-                        <TableHead className="text-right">Mi ganancia</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {porDia.map(dia => {
-                        const fechaLabel = (() => {
-                          try { return format(parseISO(dia.fecha), "EEE d/MM", { locale: es }); } catch { return dia.fecha; }
-                        })();
-                        return (
-                          <TableRow key={dia.fecha}>
-                            <TableCell className="font-medium capitalize">{fechaLabel}</TableCell>
-                            <TableCell className="text-right font-semibold text-primary">{formatCurrency(dia.totalVendido)}</TableCell>
-                            <TableCell className="text-right font-semibold text-red-700">{formatCurrency(dia.totalCosto)}</TableCell>
-                            <TableCell className="text-right font-bold text-green-700">{formatCurrency(dia.totalGanancia)}</TableCell>
+          {(() => {
+            const hoy = new Date();
+            const corte: Record<"semana" | "mes" | "30d", string> = {
+              semana: format(startOfWeek(hoy, { weekStartsOn: 1 }), "yyyy-MM-dd"),
+              mes:    format(startOfMonth(hoy), "yyyy-MM-dd"),
+              "30d":  format(subDays(hoy, 29), "yyyy-MM-dd"),
+            };
+            const diasFiltrados = (porDia ?? []).filter(d => d.fecha >= corte[filtroHistorial]);
+            const labels: Record<"semana" | "mes" | "30d", string> = {
+              semana: "Esta semana",
+              mes:    "Este mes",
+              "30d":  "Últimos 30 días",
+            };
+            return (
+              <Card>
+                <CardHeader className="pb-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <CardTitle className="text-base flex items-center gap-2 flex-1">
+                      <CalendarDays className="w-4 h-4 text-primary" /> Historial por día
+                    </CardTitle>
+                    {/* Filtros */}
+                    <div className="flex gap-1 bg-muted rounded-lg p-1">
+                      {(["semana", "mes", "30d"] as const).map(f => (
+                        <button
+                          key={f}
+                          onClick={() => setFiltroHistorial(f)}
+                          className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${
+                            filtroHistorial === f
+                              ? "bg-background shadow-sm text-foreground"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {labels[f]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {diasFiltrados.length === 0 ? (
+                    <p className="px-6 pb-5 text-sm text-muted-foreground">Sin ventas en el período seleccionado</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Día</TableHead>
+                            <TableHead className="text-right">Vendí</TableHead>
+                            <TableHead className="text-right">Costo a pagar</TableHead>
+                            <TableHead className="text-right">Mi ganancia</TableHead>
                           </TableRow>
-                        );
-                      })}
-                      {/* Fila de totales */}
-                      <TableRow className="bg-muted/40 font-bold border-t-2">
-                        <TableCell>TOTAL ({porDia.length} días)</TableCell>
-                        <TableCell className="text-right text-primary">
-                          {formatCurrency(porDia.reduce((s, d) => s + d.totalVendido, 0))}
-                        </TableCell>
-                        <TableCell className="text-right text-red-700">
-                          {formatCurrency(porDia.reduce((s, d) => s + d.totalCosto, 0))}
-                        </TableCell>
-                        <TableCell className="text-right text-green-700">
-                          {formatCurrency(porDia.reduce((s, d) => s + d.totalGanancia, 0))}
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                        </TableHeader>
+                        <TableBody>
+                          {diasFiltrados.map(dia => {
+                            const fechaLabel = (() => {
+                              try { return format(parseISO(dia.fecha), "EEE d/MM", { locale: es }); } catch { return dia.fecha; }
+                            })();
+                            return (
+                              <TableRow key={dia.fecha}>
+                                <TableCell className="font-medium capitalize">{fechaLabel}</TableCell>
+                                <TableCell className="text-right font-semibold text-primary">{formatCurrency(dia.totalVendido)}</TableCell>
+                                <TableCell className="text-right font-semibold text-red-700">{formatCurrency(dia.totalCosto)}</TableCell>
+                                <TableCell className="text-right font-bold text-green-700">{formatCurrency(dia.totalGanancia)}</TableCell>
+                              </TableRow>
+                            );
+                          })}
+                          <TableRow className="bg-muted/40 font-bold border-t-2">
+                            <TableCell>TOTAL ({diasFiltrados.length} {diasFiltrados.length === 1 ? "día" : "días"})</TableCell>
+                            <TableCell className="text-right text-primary">
+                              {formatCurrency(diasFiltrados.reduce((s, d) => s + d.totalVendido, 0))}
+                            </TableCell>
+                            <TableCell className="text-right text-red-700">
+                              {formatCurrency(diasFiltrados.reduce((s, d) => s + d.totalCosto, 0))}
+                            </TableCell>
+                            <TableCell className="text-right text-green-700">
+                              {formatCurrency(diasFiltrados.reduce((s, d) => s + d.totalGanancia, 0))}
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* ── Detalle por proveedor (mes actual) ── */}
           <div>
