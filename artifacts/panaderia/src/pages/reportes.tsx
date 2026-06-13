@@ -507,11 +507,69 @@ export default function Reportes() {
           })}
         </TabsContent>
 
-        <TabsContent value="proveedores" className="pt-6 space-y-4">
-          <p className="text-sm text-muted-foreground">Productos vendidos este mes agrupados por proveedor — muestra cuánto corresponde pagarle a cada uno.</p>
-          {!porProveedor || porProveedor.length === 0 ? (
-            <Card><CardContent className="py-12 text-center text-muted-foreground">Sin ventas registradas este mes</CardContent></Card>
-          ) : porProveedor.map(prov => {
+        <TabsContent value="proveedores" className="pt-6 space-y-6">
+
+          {/* ── Historial por día ── */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-primary" /> Historial por día
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {!porDia || porDia.length === 0 ? (
+                <p className="px-6 pb-5 text-sm text-muted-foreground">Sin ventas registradas en los últimos 30 días</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Día</TableHead>
+                        <TableHead className="text-right">Vendí</TableHead>
+                        <TableHead className="text-right">Costo a pagar</TableHead>
+                        <TableHead className="text-right">Mi ganancia</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {porDia.map(dia => {
+                        const fechaLabel = (() => {
+                          try { return format(parseISO(dia.fecha), "EEE d/MM", { locale: es }); } catch { return dia.fecha; }
+                        })();
+                        return (
+                          <TableRow key={dia.fecha}>
+                            <TableCell className="font-medium capitalize">{fechaLabel}</TableCell>
+                            <TableCell className="text-right font-semibold text-primary">{formatCurrency(dia.totalVendido)}</TableCell>
+                            <TableCell className="text-right font-semibold text-red-700">{formatCurrency(dia.totalCosto)}</TableCell>
+                            <TableCell className="text-right font-bold text-green-700">{formatCurrency(dia.totalGanancia)}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      {/* Fila de totales */}
+                      <TableRow className="bg-muted/40 font-bold border-t-2">
+                        <TableCell>TOTAL ({porDia.length} días)</TableCell>
+                        <TableCell className="text-right text-primary">
+                          {formatCurrency(porDia.reduce((s, d) => s + d.totalVendido, 0))}
+                        </TableCell>
+                        <TableCell className="text-right text-red-700">
+                          {formatCurrency(porDia.reduce((s, d) => s + d.totalCosto, 0))}
+                        </TableCell>
+                        <TableCell className="text-right text-green-700">
+                          {formatCurrency(porDia.reduce((s, d) => s + d.totalGanancia, 0))}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── Detalle por proveedor (mes actual) ── */}
+          <div>
+            <p className="text-sm text-muted-foreground mb-4">Desglose mensual por proveedor — cuánto corresponde pagarle a cada uno.</p>
+            {!porProveedor || porProveedor.length === 0 ? (
+              <Card><CardContent className="py-12 text-center text-muted-foreground">Sin ventas registradas este mes</CardContent></Card>
+            ) : <div className="space-y-4">{porProveedor.map(prov => {
             const abierto = expandidoProv === prov.proveedorNombre;
             return (
               <Card key={prov.proveedorNombre} className="overflow-hidden">
@@ -599,7 +657,8 @@ export default function Reportes() {
                 )}
               </Card>
             );
-          })}
+          })}</div>}
+          </div>
         </TabsContent>
 
         <TabsContent value="pordia" className="pt-6 space-y-4">
