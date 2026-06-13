@@ -11,7 +11,7 @@ import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Cart
 import { formatCurrency } from "@/lib/format";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
-import { BarChart as BarChartIcon, TrendingUp, Users, ChevronDown, ChevronUp, CalendarDays, Package } from "lucide-react";
+import { BarChart as BarChartIcon, TrendingUp, Users, ChevronDown, ChevronUp, CalendarDays, Package, ShoppingBag, Truck } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
@@ -21,9 +21,19 @@ interface VendedorDetalle {
   cantidadVentas: number;
   totalVentas: number;
   gananciaGenerada: number;
-  hoy: { cantidadVentas: number; totalVentas: number; ganancia: number };
+  costoMes: number;
+  hoy: { cantidadVentas: number; totalVentas: number; ganancia: number; costo: number };
   topProductosGlobal: { nombre: string; cantidad: number; ingresos: number; ganancia: number }[];
   productosHoy: { nombre: string; cantidad: number; ingresos: number; ganancia: number }[];
+}
+
+interface ProveedorDetalle {
+  proveedorId: number | null;
+  proveedorNombre: string;
+  costoTotal: number;
+  ingresos: number;
+  ganancia: number;
+  productos: { codigo: string; nombre: string; cantidad: number; costoTotal: number; ingresos: number; ganancia: number }[];
 }
 
 export default function Reportes() {
@@ -36,7 +46,14 @@ export default function Reportes() {
     queryFn: () => fetch("/api/reportes/vendedores-detalle", { credentials: "include" }).then(r => r.json()),
     refetchInterval: 30000,
   });
+  const { data: porProveedor } = useQuery<ProveedorDetalle[]>({
+    queryKey: ["reportes", "por-proveedor"],
+    queryFn: () => fetch("/api/reportes/por-proveedor", { credentials: "include" }).then(r => r.json()),
+    refetchInterval: 30000,
+  });
+
   const [expandido, setExpandido] = useState<string | null>(null);
+  const [expandidoProv, setExpandidoProv] = useState<string | null>(null);
 
   const chartColors = [
     "hsl(var(--chart-1))",
@@ -86,10 +103,11 @@ export default function Reportes() {
       </div>
 
       <Tabs defaultValue="ventas" className="w-full">
-        <TabsList className="grid w-full md:w-[400px] grid-cols-3">
+        <TabsList className="grid w-full md:w-[530px] grid-cols-4">
           <TabsTrigger value="ventas">Ventas</TabsTrigger>
           <TabsTrigger value="productos">Productos</TabsTrigger>
           <TabsTrigger value="equipo">Equipo</TabsTrigger>
+          <TabsTrigger value="proveedores">Proveedores</TabsTrigger>
         </TabsList>
         
         <TabsContent value="ventas" className="pt-6">
@@ -99,89 +117,120 @@ export default function Reportes() {
               <CardDescription>Ingresos vs Ganancia neta diaria</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[400px] w-full mt-4">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={ventasMes || []} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                    <XAxis 
-                      dataKey="fecha" 
-                      tickFormatter={(val) => format(parseISO(val), 'dd MMM', { locale: es })}
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
-                      tickLine={false}
-                      axisLine={false}
-                      dy={10}
-                    />
-                    <YAxis 
-                      tickFormatter={(val) => `$${val/1000}k`}
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
-                      tickLine={false}
-                      axisLine={false}
-                      dx={-10}
-                    />
-                    <RechartsTooltip 
-                      formatter={(value: number, name: string) => [formatCurrency(value), name === 'totalVentas' ? 'Ingresos' : 'Ganancia']}
-                      labelFormatter={(label) => format(parseISO(label as string), 'dd MMM yyyy', { locale: es })}
-                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: 'var(--radius)' }}
-                    />
-                    <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                    <Line type="monotone" dataKey="totalVentas" name="totalVentas" stroke="hsl(var(--primary))" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                    <Line type="monotone" dataKey="ganancia" name="ganancia" stroke="hsl(var(--chart-2))" strokeWidth={3} dot={false} />
+              {ventasMes && ventasMes.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={ventasMes}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="fecha" tickFormatter={f => { try { return format(parseISO(f), "d MMM", { locale: es }); } catch { return f; } }} />
+                    <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                    <RechartsTooltip formatter={(v: number) => formatCurrency(v)} labelFormatter={l => { try { return format(parseISO(l as string), "EEEE d MMM", { locale: es }); } catch { return l; } }} />
+                    <Legend />
+                    <Line type="monotone" dataKey="totalVentas" name="Ingresos" stroke={chartColors[0]} strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="ganancia" name="Ganancia" stroke={chartColors[1]} strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
-              </div>
+              ) : (
+                <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">Sin datos de ventas aún</div>
+              )}
             </CardContent>
           </Card>
+
+          <div className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Resumen por Día</CardTitle>
+              </CardHeader>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead className="text-right">Ventas</TableHead>
+                      <TableHead className="text-right">Ingresos</TableHead>
+                      <TableHead className="text-right">Ganancia</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {!ventasMes || ventasMes.length === 0 ? (
+                      <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">Sin registros</TableCell></TableRow>
+                    ) : [...ventasMes].reverse().map(d => (
+                      <TableRow key={d.fecha}>
+                        <TableCell className="font-medium">{(() => { try { return format(parseISO(d.fecha), "EEEE d MMM yyyy", { locale: es }); } catch { return d.fecha; } })()}</TableCell>
+                        <TableCell className="text-right">{d.cantidadVentas}</TableCell>
+                        <TableCell className="text-right font-medium">{formatCurrency(d.totalVentas)}</TableCell>
+                        <TableCell className="text-right text-green-700 font-medium">{formatCurrency(d.ganancia)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="productos" className="pt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Top 10 Productos por Ingresos</CardTitle>
-              <CardDescription>Los productos que generan mayor facturación</CardDescription>
+              <CardTitle>Top Productos</CardTitle>
+              <CardDescription>Los más vendidos del período</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[400px] w-full mt-4">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topProductos?.slice(0, 10) || []} layout="vertical" margin={{ top: 5, right: 30, left: 100, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
-                    <XAxis type="number" 
-                      tickFormatter={(val) => `$${val/1000}k`}
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
-                    />
-                    <YAxis dataKey="nombre" type="category" 
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
-                      width={90}
-                    />
-                    <RechartsTooltip 
-                      formatter={(value: number) => formatCurrency(value)}
-                      cursor={{ fill: 'hsl(var(--muted))' }}
-                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: 'var(--radius)' }}
-                    />
-                    <Bar dataKey="ingresos" name="Ingresos" radius={[0, 4, 4, 0]}>
-                      {(topProductos?.slice(0, 10) || []).map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={chartColors[index % chartColors.length]} />
-                      ))}
-                    </Bar>
+              {topProductos && topProductos.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={topProductos.slice(0, 8)} layout="vertical" margin={{ left: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                    <YAxis type="category" dataKey="nombre" width={120} tick={{ fontSize: 12 }} />
+                    <RechartsTooltip formatter={(v: number) => formatCurrency(v)} />
+                    <Bar dataKey="ingresos" name="Ingresos" fill={chartColors[0]} />
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
+              ) : (
+                <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">Sin datos de productos aún</div>
+              )}
             </CardContent>
           </Card>
+
+          <div className="mt-6">
+            <Card>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>#</TableHead>
+                      <TableHead>Producto</TableHead>
+                      <TableHead className="text-right">Unidades</TableHead>
+                      <TableHead className="text-right">Ingresos</TableHead>
+                      <TableHead className="text-right">Ganancia</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {!topProductos || topProductos.length === 0 ? (
+                      <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Sin registros</TableCell></TableRow>
+                    ) : topProductos.map((p, i) => (
+                      <TableRow key={p.codigo}>
+                        <TableCell className="text-muted-foreground">{i + 1}</TableCell>
+                        <TableCell className="font-medium">{p.nombre}</TableCell>
+                        <TableCell className="text-right">{p.cantidadVendida}</TableCell>
+                        <TableCell className="text-right font-medium">{formatCurrency(p.ingresos)}</TableCell>
+                        <TableCell className="text-right text-green-700 font-medium">{formatCurrency(p.ganancia)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="equipo" className="pt-6 space-y-4">
-          {!vendedoresDetalle?.length ? (
-            <Card><CardContent className="py-12 text-center text-muted-foreground">No hay datos de vendedores aún.</CardContent></Card>
+          {!vendedoresDetalle || vendedoresDetalle.length === 0 ? (
+            <Card><CardContent className="py-12 text-center text-muted-foreground">Sin ventas registradas aún</CardContent></Card>
           ) : vendedoresDetalle.map(v => {
             const abierto = expandido === v.vendedor;
             const iniciales = v.vendedor.substring(0, 2).toUpperCase();
             return (
               <Card key={v.vendedor} className="overflow-hidden">
-                {/* ── Cabecera del vendedor ── */}
                 <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
                   <div className="flex items-center gap-3 flex-1">
                     <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">
@@ -189,12 +238,12 @@ export default function Reportes() {
                     </div>
                     <div>
                       <p className="font-semibold text-base capitalize">{v.vendedor}</p>
-                      <p className="text-xs text-muted-foreground">{v.cantidadVentas} operaciones en total</p>
+                      <p className="text-xs text-muted-foreground">{v.cantidadVentas} operaciones este mes</p>
                     </div>
                   </div>
 
-                  {/* ── Stats del día ── */}
-                  <div className="flex gap-3 flex-wrap">
+                  <div className="flex gap-2 flex-wrap">
+                    {/* Hoy vendido */}
                     <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
                       <CalendarDays className="w-4 h-4 text-primary shrink-0" />
                       <div>
@@ -202,6 +251,15 @@ export default function Reportes() {
                         <p className="font-bold text-sm text-primary">{formatCurrency(v.hoy.totalVentas)}</p>
                       </div>
                     </div>
+                    {/* Hoy costo */}
+                    <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                      <ShoppingBag className="w-4 h-4 text-orange-500 shrink-0" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Hoy — costo</p>
+                        <p className="font-bold text-sm text-orange-700">{formatCurrency(v.hoy.costo)}</p>
+                      </div>
+                    </div>
+                    {/* Hoy ganancia */}
                     <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
                       <TrendingUp className="w-4 h-4 text-green-600 shrink-0" />
                       <div>
@@ -209,11 +267,20 @@ export default function Reportes() {
                         <p className="font-bold text-sm text-green-700">{formatCurrency(v.hoy.ganancia)}</p>
                       </div>
                     </div>
+                    {/* Mes ganancia */}
                     <div className="flex items-center gap-2 bg-muted/40 rounded-lg px-3 py-2">
                       <Users className="w-4 h-4 text-muted-foreground shrink-0" />
                       <div>
                         <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Este mes — ganancia</p>
                         <p className="font-bold text-sm">{formatCurrency(v.gananciaGenerada)}</p>
+                      </div>
+                    </div>
+                    {/* Mes costo */}
+                    <div className="flex items-center gap-2 bg-muted/40 rounded-lg px-3 py-2">
+                      <ShoppingBag className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Este mes — costo</p>
+                        <p className="font-bold text-sm text-orange-700">{formatCurrency(v.costoMes)}</p>
                       </div>
                     </div>
                   </div>
@@ -226,10 +293,8 @@ export default function Reportes() {
                   </button>
                 </div>
 
-                {/* ── Detalle expandido ── */}
                 {abierto && (
                   <div className="border-t grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x">
-                    {/* Hoy */}
                     <div className="p-4">
                       <div className="flex items-center gap-2 mb-3">
                         <CalendarDays className="w-4 h-4 text-primary" />
@@ -252,11 +317,10 @@ export default function Reportes() {
                         </div>
                       )}
                     </div>
-                    {/* Top histórico */}
                     <div className="p-4">
                       <div className="flex items-center gap-2 mb-3">
                         <Package className="w-4 h-4 text-muted-foreground" />
-                        <p className="font-semibold text-sm">Top productos histórico</p>
+                        <p className="font-semibold text-sm">Top productos este mes</p>
                       </div>
                       {v.topProductosGlobal.length === 0 ? (
                         <p className="text-sm text-muted-foreground italic">Sin ventas registradas</p>
@@ -274,6 +338,101 @@ export default function Reportes() {
                           ))}
                         </div>
                       )}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </TabsContent>
+
+        <TabsContent value="proveedores" className="pt-6 space-y-4">
+          <p className="text-sm text-muted-foreground">Productos vendidos este mes agrupados por proveedor — muestra cuánto corresponde pagarle a cada uno.</p>
+          {!porProveedor || porProveedor.length === 0 ? (
+            <Card><CardContent className="py-12 text-center text-muted-foreground">Sin ventas registradas este mes</CardContent></Card>
+          ) : porProveedor.map(prov => {
+            const abierto = expandidoProv === prov.proveedorNombre;
+            return (
+              <Card key={prov.proveedorNombre} className="overflow-hidden">
+                <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="w-11 h-11 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                      <Truck className="w-5 h-5 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-base">{prov.proveedorNombre}</p>
+                      <p className="text-xs text-muted-foreground">{prov.productos.length} productos vendidos</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 flex-wrap">
+                    {/* Lo que vendí de este proveedor */}
+                    <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
+                      <TrendingUp className="w-4 h-4 text-primary shrink-0" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Vendí</p>
+                        <p className="font-bold text-sm text-primary">{formatCurrency(prov.ingresos)}</p>
+                      </div>
+                    </div>
+                    {/* A pagar al proveedor */}
+                    <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      <ShoppingBag className="w-4 h-4 text-red-500 shrink-0" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">A pagarle</p>
+                        <p className="font-bold text-sm text-red-700">{formatCurrency(prov.costoTotal)}</p>
+                      </div>
+                    </div>
+                    {/* Lo que me queda */}
+                    <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                      <TrendingUp className="w-4 h-4 text-green-600 shrink-0" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Me queda</p>
+                        <p className="font-bold text-sm text-green-700">{formatCurrency(prov.ganancia)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto shrink-0"
+                    onClick={() => setExpandidoProv(abierto ? null : prov.proveedorNombre)}
+                  >
+                    {abierto ? <><ChevronUp className="w-4 h-4" /> Ocultar</> : <><ChevronDown className="w-4 h-4" /> Ver detalle</>}
+                  </button>
+                </div>
+
+                {abierto && (
+                  <div className="border-t p-4">
+                    <p className="font-semibold text-sm mb-3">Productos vendidos de {prov.proveedorNombre}</p>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Producto</TableHead>
+                            <TableHead className="text-right">Cant.</TableHead>
+                            <TableHead className="text-right">Costo total</TableHead>
+                            <TableHead className="text-right">Vendido</TableHead>
+                            <TableHead className="text-right">Me queda</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {prov.productos.map(p => (
+                            <TableRow key={p.codigo}>
+                              <TableCell className="font-medium">{p.nombre}</TableCell>
+                              <TableCell className="text-right">{p.cantidad}</TableCell>
+                              <TableCell className="text-right text-red-700">{formatCurrency(p.costoTotal)}</TableCell>
+                              <TableCell className="text-right font-medium">{formatCurrency(p.ingresos)}</TableCell>
+                              <TableCell className="text-right text-green-700 font-medium">{formatCurrency(p.ganancia)}</TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow className="bg-muted/30 font-bold">
+                            <TableCell>TOTAL</TableCell>
+                            <TableCell />
+                            <TableCell className="text-right text-red-700">{formatCurrency(prov.costoTotal)}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(prov.ingresos)}</TableCell>
+                            <TableCell className="text-right text-green-700">{formatCurrency(prov.ganancia)}</TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
                     </div>
                   </div>
                 )}

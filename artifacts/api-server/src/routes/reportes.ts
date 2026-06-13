@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { ventasTable, itemsVentaTable, comprasTable, productosTable } from "@workspace/db";
+import { ventasTable, itemsVentaTable, comprasTable, productosTable, proveedoresTable } from "@workspace/db";
 import { eq, gte, lte, and, sql, desc, SQL } from "drizzle-orm";
 import { ObtenerResumenQueryParams, ObtenerVentasPorDiaQueryParams } from "@workspace/api-zod";
 
@@ -142,6 +142,26 @@ router.get("/vendedores-detalle", async (req, res) => {
     .where(and(gte(ventasTable.fecha, inicioDia), lte(ventasTable.fecha, finDia)))
     .groupBy(ventasTable.vendedor);
 
+  const costoMes = await db
+    .select({
+      vendedor: ventasTable.vendedor,
+      costoTotal: sql<number>`sum(${itemsVentaTable.precioCosto}::numeric * ${itemsVentaTable.cantidad})`,
+    })
+    .from(itemsVentaTable)
+    .innerJoin(ventasTable, eq(itemsVentaTable.ventaId, ventasTable.id))
+    .where(gte(ventasTable.fecha, inicioMesActual()))
+    .groupBy(ventasTable.vendedor);
+
+  const costoHoy = await db
+    .select({
+      vendedor: ventasTable.vendedor,
+      costoTotal: sql<number>`sum(${itemsVentaTable.precioCosto}::numeric * ${itemsVentaTable.cantidad})`,
+    })
+    .from(itemsVentaTable)
+    .innerJoin(ventasTable, eq(itemsVentaTable.ventaId, ventasTable.id))
+    .where(and(gte(ventasTable.fecha, inicioDia), lte(ventasTable.fecha, finDia)))
+    .groupBy(ventasTable.vendedor);
+
   const productosGlobal = await db
     .select({
       vendedor: ventasTable.vendedor,
@@ -180,10 +200,12 @@ router.get("/vendedores-detalle", async (req, res) => {
       cantidadVentas: Number(global?.cantidadVentas ?? 0),
       totalVentas: Number(global?.totalVentas ?? 0),
       gananciaGenerada: Number(global?.gananciaGenerada ?? 0),
+      costoMes: Number(costoMes.find(r => r.vendedor === v)?.costoTotal ?? 0),
       hoy: {
         cantidadVentas: Number(hoy?.cantidadVentasHoy ?? 0),
         totalVentas: Number(hoy?.totalHoy ?? 0),
         ganancia: Number(hoy?.gananciaHoy ?? 0),
+        costo: Number(costoHoy.find(r => r.vendedor === v)?.costoTotal ?? 0),
       },
       topProductosGlobal: productosGlobal
         .filter(p => p.vendedor === v)
@@ -196,6 +218,53 @@ router.get("/vendedores-detalle", async (req, res) => {
   });
 
   return res.json(respuesta);
+});
+
+router.get("/por-proveedor", async (req, res) => {
+  const rows = await db
+    .select({
+      proveedorId: productosTable.proveedorId,
+      proveedorNombre: proveedoresTable.nombre,
+      productoCodigo: itemsVentaTable.productoCodigo,
+      productoNombre: itemsVentaTable.productoNombre,
+      cantidad: sql<number>`sum(${itemsVentaTable.cantidad})`,
+      costoTotal: sql<number>`sum(${itemsVentaTable.precioCosto}::numeric * ${itemsVentaTable.cantidad})`,
+      ingresos: sql<number>`sum(${itemsVentaTable.subtotal}::numeric)`,
+      ganancia: sql<number>`sum((${itemsVentaTable.precioUnitario}::numeric - ${itemsVentaTable.precioCosto}::numeric) * ${itemsVentaTable.cantidad})`,
+    })
+    .from(itemsVentaTable)
+    .innerJoin(ventasTable, eq(itemsVentaTable.ventaId, ventasTable.id))
+    .innerJoin(productosTable, eq(itemsVentaTable.productoCodigo, productosTable.codigo))
+    .leftJoin(proveedoresTable, eq(productosTable.proveedorId, proveedoresTable.id))
+    .where(gte(ventasTable.fecha, inicioMesActual()))
+    .groupBy(productosTable.proveedorId, proveedoresTable.nombre, itemsVentaTable.productoCodigo, itemsVentaTable.productoNombre)
+    .orderBy(proveedoresTable.nombre, desc(sql`sum(${itemsVentaTable.cantidad})`));
+
+  const proveedoresMap = new Map<string, {
+    proveedorId: number | null;
+    proveedorNombre: string;
+    costoTotal: number;
+    ingresos: number;
+    ganancia: number;
+    productos: { codigo: string; nombre: string; cantidad: number; costoTotal: number; ingresos: number; ganancia: number }[];
+  }>();
+
+  for (const r of rows) {
+    const key = r.proveedorNombre ?? "Sin proveedor";
+    if (!proveedoresMap.has(key)) {
+      proveedoresMap.set(key, { proveedorId: r.proveedorId ?? null, proveedorNombre: key, costoTotal: 0, ingresos: 0, ganancia: 0, productos: [] });
+    }
+    const entry = proveedoresMap.get(key)!;
+    const costo = Number(r.costoTotal ?? 0);
+    const ingreso = Number(r.ingresos ?? 0);
+    const gan = Number(r.ganancia ?? 0);
+    entry.costoTotal += costo;
+    entry.ingresos += ingreso;
+    entry.ganancia += gan;
+    entry.productos.push({ codigo: r.productoCodigo, nombre: r.productoNombre, cantidad: Number(r.cantidad), costoTotal: costo, ingresos: ingreso, ganancia: gan });
+  }
+
+  return res.json(Array.from(proveedoresMap.values()));
 });
 
 router.get("/stock-bajo", async (req, res) => {
