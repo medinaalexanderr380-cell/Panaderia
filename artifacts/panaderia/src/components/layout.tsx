@@ -1,15 +1,85 @@
 import { Link, useLocation } from "wouter";
 import {
   Store, ShoppingCart, Package, Users, BarChart, Truck, ShieldCheck, AlertTriangle, ShoppingBag, Receipt,
+  WifiOff, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useEffect, useState, useRef } from "react";
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
+type ServerStatus = "ok" | "starting" | "offline";
+
+function useServerStatus() {
+  const [status, setStatus] = useState<ServerStatus>("ok");
+  const [showBanner, setShowBanner] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const check = async () => {
+      try {
+        const res = await fetch("/api/healthz", { cache: "no-store" });
+        if (!cancelled) {
+          if (res.ok) {
+            if (status !== "ok") {
+              setStatus("ok");
+              // Show "volvió" banner briefly then hide
+              setShowBanner(true);
+              hideTimer.current = setTimeout(() => setShowBanner(false), 3000);
+            } else {
+              setShowBanner(false);
+            }
+          } else {
+            setStatus("starting");
+            setShowBanner(true);
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setStatus("offline");
+          setShowBanner(true);
+        }
+      }
+    };
+
+    check();
+    const interval = setInterval(check, 10000);
+    return () => { cancelled = true; clearInterval(interval); if (hideTimer.current) clearTimeout(hideTimer.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return { status, showBanner };
+}
+
+function ServerBanner({ status, showBanner }: { status: ServerStatus; showBanner: boolean }) {
+  if (!showBanner) return null;
+
+  if (status === "ok") {
+    return (
+      <div className="w-full bg-green-600 text-white text-sm py-2 px-4 flex items-center justify-center gap-2 z-50">
+        <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+        Servidor conectado — ya podés usar la app normalmente
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full bg-amber-500 text-white text-sm py-2 px-4 flex items-center justify-center gap-2 z-50">
+      {status === "starting"
+        ? <><Loader2 className="w-4 h-4 animate-spin" /> El servidor está iniciando, por favor esperá unos segundos…</>
+        : <><WifiOff className="w-4 h-4" /> Sin conexión al servidor — intentando reconectar…</>
+      }
+    </div>
+  );
+}
+
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
+  const { status, showBanner } = useServerStatus();
 
   const mainNav = [
     { name: "Inicio", href: "/", icon: Store },
@@ -39,10 +109,11 @@ export function Layout({ children }: LayoutProps) {
     href === "/" ? location === "/" : location.startsWith(href);
 
   return (
-    <div className="min-h-screen bg-background font-sans">
+    <div className="min-h-screen bg-background font-sans flex flex-col">
+      <ServerBanner status={status} showBanner={showBanner} />
 
       {/* ── DESKTOP: sidebar lateral ── */}
-      <div className="hidden md:flex min-h-screen">
+      <div className="hidden md:flex flex-1">
         <aside className="w-64 bg-sidebar border-r border-sidebar-border flex-shrink-0 flex flex-col">
           <div className="p-6">
             <Link href="/" className="flex items-center gap-2">
@@ -102,7 +173,7 @@ export function Layout({ children }: LayoutProps) {
       </div>
 
       {/* ── MOBILE: header + contenido + barra inferior ── */}
-      <div className="flex flex-col md:hidden min-h-screen">
+      <div className="flex flex-col md:hidden flex-1">
         <header className="bg-sidebar border-b border-sidebar-border px-4 py-3 flex items-center sticky top-0 z-40">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center">

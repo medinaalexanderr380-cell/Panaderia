@@ -10,6 +10,7 @@ import camionetaRouter from "./camioneta";
 import perdidasRouter from "./perdidas";
 import usuariosRouter from "./usuarios";
 import gastosRouter from "./gastos";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use("/camioneta", camionetaRouter);
 router.use("/perdidas", perdidasRouter);
 router.use("/usuarios", usuariosRouter);
 router.use("/gastos", gastosRouter);
+router.use("/admin", adminRouter);
 
 export default router;

@@ -15,7 +15,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, Plus, Key, UserX, Edit2, ShieldCheck, User, Lock } from "lucide-react";
+import { Users, Plus, Key, UserX, Edit2, ShieldCheck, User, Lock, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const ADMIN_PASSWORD = "04052005";
@@ -96,6 +96,8 @@ export default function Usuarios() {
   const [dialogEditar, setDialogEditar] = useState<Usuario | null>(null);
   const [dialogPassword, setDialogPassword] = useState<Usuario | null>(null);
   const [dialogDesactivar, setDialogDesactivar] = useState<Usuario | null>(null);
+  const [dialogReiniciar, setDialogReiniciar] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
 
   const [form, setForm] = useState({ username: "", nombre: "", password: "", rol: "vendedor" });
   const [editForm, setEditForm] = useState({ nombre: "", rol: "vendedor", activo: true });
@@ -126,6 +128,17 @@ export default function Usuarios() {
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
 
+  const reiniciarMutation = useMutation({
+    mutationFn: () => apiFetch("/api/admin/reiniciar", { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+      toast({ title: "✅ Datos reiniciados", description: "Todos los datos fueron borrados. Podés empezar de cero." });
+      setDialogReiniciar(false);
+      setConfirmText("");
+    },
+    onError: (e: any) => toast({ title: "Error al reiniciar", description: e.message, variant: "destructive" }),
+  });
+
   if (!acceso) {
     return <PantallaContrasena onAcceso={() => setAcceso(true)} />;
   }
@@ -145,6 +158,31 @@ export default function Usuarios() {
           </Button>
         </div>
       </div>
+
+      {/* Zona de peligro */}
+      <Card className="border-destructive/40">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base text-destructive flex items-center gap-2">
+            <Trash2 className="w-4 h-4" /> Zona de peligro
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Reiniciar todos los datos</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Borra todas las ventas, compras, productos, proveedores, pérdidas y gastos. No se puede deshacer.
+            </p>
+          </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            className="shrink-0 ml-4"
+            onClick={() => { setConfirmText(""); setDialogReiniciar(true); }}
+          >
+            <Trash2 className="w-4 h-4 mr-1.5" /> Reiniciar datos
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="bg-muted/30 border-b pb-4">
@@ -299,6 +337,53 @@ export default function Usuarios() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog: Reiniciar todos los datos */}
+      <Dialog open={dialogReiniciar} onOpenChange={o => { if (!o) { setDialogReiniciar(false); setConfirmText(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <Trash2 className="w-5 h-5" /> Reiniciar todos los datos
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="bg-destructive/10 border border-destructive/30 rounded-md p-3 text-sm text-destructive space-y-1">
+              <p className="font-semibold">⚠️ Esta acción no se puede deshacer.</p>
+              <p>Se borrarán permanentemente:</p>
+              <ul className="list-disc list-inside text-xs space-y-0.5 mt-1 text-destructive/80">
+                <li>Todas las ventas e ítems de venta</li>
+                <li>Todas las compras e ítems de compra</li>
+                <li>Todos los productos y proveedores</li>
+                <li>Todas las pérdidas y gastos</li>
+              </ul>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Escribí <span className="font-mono font-bold text-destructive">REINICIAR</span> para confirmar
+              </label>
+              <Input
+                placeholder="REINICIAR"
+                value={confirmText}
+                onChange={e => setConfirmText(e.target.value)}
+                className="font-mono"
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDialogReiniciar(false); setConfirmText(""); }}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => reiniciarMutation.mutate()}
+              disabled={confirmText !== "REINICIAR" || reiniciarMutation.isPending}
+            >
+              {reiniciarMutation.isPending ? "Reiniciando..." : "Sí, borrar todo"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
