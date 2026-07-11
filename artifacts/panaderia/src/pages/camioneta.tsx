@@ -511,9 +511,9 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
   const handleVerifyAndLoad = async (password: string) => {
     setVerifying(true);
     setCredError("");
-    await new Promise(r => setTimeout(r, 300));
+    const result = await verificarCredenciales(vendedor, password);
     setVerifying(false);
-    if (password !== DEV_PASSWORD) { setCredError("Contraseña incorrecta"); return; }
+    if (!result.ok) { setCredError(result.error!); return; }
     setCredOpen(false);
     cargaMutation.mutate(items);
   };
@@ -776,9 +776,15 @@ function TabVentaRuta({ vendedor, stock, onCaducado }: { vendedor: Vendedor; sto
 type Tab = "stock" | "cargar" | "venta";
 
 export default function Camioneta() {
-  const [vendedorSeleccionado] = useState<Vendedor>("david");
+  const [vendedorSeleccionado, setVendedorSeleccionado] = useState<Vendedor>("david");
   const [tab, setTab] = useState<Tab>("stock");
   const { toast } = useToast();
+
+  // ── Cambiar camioneta (requiere contraseña dev) ──
+  const [devDialogOpen, setDevDialogOpen] = useState(false);
+  const [devPassword, setDevPassword] = useState("");
+  const [devError, setDevError] = useState("");
+  const [selectorOpen, setSelectorOpen] = useState(false);
 
   const { data: stock, isLoading } = useCamionetaStock(vendedorSeleccionado);
 
@@ -816,13 +822,89 @@ export default function Camioneta() {
     { id: "venta", label: "Venta en Ruta", icon: ShoppingCart },
   ];
 
+  const handleDevConfirm = () => {
+    if (devPassword !== DEV_PASSWORD) { setDevError("Contraseña incorrecta"); return; }
+    setDevDialogOpen(false);
+    setDevPassword("");
+    setDevError("");
+    setSelectorOpen(true);
+  };
+
+  const nombreVendedor = VENDEDORES.find(v => v.username === vendedorSeleccionado)?.nombre;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Truck className="w-8 h-8 text-primary" /> Mi Camioneta
+          <Truck className="w-8 h-8 text-primary" /> Camioneta de {nombreVendedor}
         </h1>
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-xs text-muted-foreground gap-1"
+          onClick={() => { setDevPassword(""); setDevError(""); setDevDialogOpen(true); }}
+        >
+          <Plus className="w-3.5 h-3.5" /> Otra camioneta
+        </Button>
       </div>
+
+      {/* Dialog: contraseña dev para cambiar camioneta */}
+      <Dialog open={devDialogOpen} onOpenChange={open => { if (!open) { setDevDialogOpen(false); setDevPassword(""); setDevError(""); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="w-5 h-5 text-primary" /> Acceso de desarrollador
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">Ingresá la contraseña de desarrollador para cambiar de camioneta</p>
+            <div className="relative">
+              <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="pl-9 text-xl tracking-widest"
+                type="password"
+                inputMode="numeric"
+                placeholder="••••"
+                value={devPassword}
+                onChange={e => { setDevPassword(e.target.value); setDevError(""); }}
+                onKeyDown={e => e.key === "Enter" && devPassword && handleDevConfirm()}
+                autoFocus
+              />
+            </div>
+            {devError && <p className="text-destructive text-sm bg-destructive/10 p-2 rounded">{devError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDevDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleDevConfirm} disabled={!devPassword}>Confirmar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: selector de camioneta (solo después de autenticar con dev) */}
+      <Dialog open={selectorOpen} onOpenChange={setSelectorOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="w-5 h-5 text-primary" /> Seleccionar camioneta
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3 py-4">
+            {VENDEDORES.map(v => (
+              <button
+                key={v.username}
+                onClick={() => { setVendedorSeleccionado(v.username); setTab("stock"); setSelectorOpen(false); }}
+                className={`py-6 rounded-xl border-2 font-bold text-lg transition-all ${
+                  vendedorSeleccionado === v.username
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-card hover:border-primary hover:bg-primary/5 hover:text-primary"
+                }`}
+              >
+                {v.nombre}
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex gap-2 border-b border-border">
         {tabs.map(t => (
