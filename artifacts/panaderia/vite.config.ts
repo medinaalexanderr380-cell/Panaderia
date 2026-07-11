@@ -37,8 +37,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["favicon.png", "icons/apple-touch-icon.png", "icons/pwa-192x192.png", "icons/pwa-512x512.png"],
       manifest: {
-        name: "Control de Stock y Ventas",
-        short_name: "Control Stock",
+        name: "RegistroAM",
+        short_name: "RegistroAM",
         description: "Sistema de control de stock, ventas y compras",
         theme_color: "#92400e",
         background_color: "#fafaf9",

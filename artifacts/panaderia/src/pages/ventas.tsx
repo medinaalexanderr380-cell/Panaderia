@@ -104,8 +104,8 @@ function TicketImpresion({ ticket, onClose }: { ticket: TicketData; onClose: () 
         >
           {/* Encabezado */}
           <div className="text-center mb-3">
-            <p className="font-bold text-[15px] tracking-widest">PANADERÍA PRO</p>
-            <p className="text-[10px] text-gray-500 tracking-wide">Control de Stock y Ventas</p>
+            <p className="font-bold text-[15px] tracking-widest">REGISTROAM</p>
+            <p className="text-[10px] text-gray-500 tracking-wide">Sistema de Gestión</p>
           </div>
 
           <p className="text-center text-[10px] text-gray-400">{"─".repeat(36)}</p>

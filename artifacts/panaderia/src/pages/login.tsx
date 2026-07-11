@@ -32,8 +32,8 @@ export default function Login() {
           <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center mb-4 shadow-lg">
             <Store className="w-9 h-9 text-primary-foreground" />
           </div>
-          <h1 className="text-3xl font-bold text-foreground">Panadería Pro</h1>
-          <p className="text-muted-foreground mt-1">Sistema de Panificación</p>
+          <h1 className="text-3xl font-bold text-foreground">RegistroAM</h1>
+          <p className="text-muted-foreground mt-1">Sistema de Gestión</p>
         </div>
 
         <Card className="shadow-lg border-border">
