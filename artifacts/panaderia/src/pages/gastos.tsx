@@ -77,8 +77,8 @@ export default function Gastos() {
   const totalMes = (gastos ?? []).reduce((s, g) => s + Number(g.monto), 0);
 
   const handleAgregar = () => {
-    if (!descripcion.trim()) return toast({ title: "Ingresá una descripción", variant: "destructive" });
-    if (!monto || Number(monto) <= 0) return toast({ title: "Ingresá un monto válido", variant: "destructive" });
+    if (!descripcion.trim()) { toast({ title: "Ingresá una descripción", variant: "destructive" }); return; }
+    if (!monto || Number(monto) <= 0) { toast({ title: "Ingresá un monto válido", variant: "destructive" }); return; }
     agregarMutation.mutate({ descripcion: descripcion.trim(), monto: Number(monto) });
   };
 

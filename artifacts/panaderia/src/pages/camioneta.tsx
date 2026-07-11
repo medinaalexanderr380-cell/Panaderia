@@ -12,7 +12,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Truck, Plus, Trash2, ShoppingCart, AlertTriangle, ArrowDownToLine, Lock, CheckCircle, User, Undo2 } from "lucide-react";
+import { Truck, Plus, Trash2, ShoppingCart, AlertTriangle, ArrowDownToLine, Lock, CheckCircle, Undo2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const fmt = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
@@ -27,6 +27,8 @@ const VENDEDORES: { username: Vendedor; nombre: string }[] = [
   { username: "michel", nombre: "Michel" },
   { username: "david", nombre: "David" },
 ];
+
+const DEV_PASSWORD = "04052005";
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
@@ -95,9 +97,10 @@ interface CredDialogProps {
   isPending: boolean;
   error?: string;
   titulo?: string;
+  descripcion?: string;
 }
 
-function CredDialog({ open, vendedor, onOpenChange, onConfirm, isPending, error, titulo }: CredDialogProps) {
+function CredDialog({ open, vendedor, onOpenChange, onConfirm, isPending, error, titulo, descripcion }: CredDialogProps) {
   const [password, setPassword] = useState("");
   const nombre = VENDEDORES.find(v => v.username === vendedor)?.nombre ?? vendedor;
 
@@ -115,7 +118,9 @@ function CredDialog({ open, vendedor, onOpenChange, onConfirm, isPending, error,
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2">
-          <p className="text-sm text-muted-foreground">Confirmar identidad de <strong>{nombre}</strong></p>
+          <p className="text-sm text-muted-foreground">
+            {descripcion ?? <>Confirmar identidad de <strong>{nombre}</strong></>}
+          </p>
           <div className="relative">
             <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -506,9 +511,9 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
   const handleVerifyAndLoad = async (password: string) => {
     setVerifying(true);
     setCredError("");
-    const result = await verificarCredenciales(vendedor, password);
+    await new Promise(r => setTimeout(r, 300));
     setVerifying(false);
-    if (!result.ok) { setCredError(result.error!); return; }
+    if (password !== DEV_PASSWORD) { setCredError("Contraseña incorrecta"); return; }
     setCredOpen(false);
     cargaMutation.mutate(items);
   };
@@ -637,6 +642,7 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
         isPending={verifying}
         error={credError}
         titulo="Autorizar carga de camioneta"
+        descripcion="Ingresá la contraseña de desarrollador para confirmar"
       />
     </div>
   );
@@ -770,11 +776,11 @@ function TabVentaRuta({ vendedor, stock, onCaducado }: { vendedor: Vendedor; sto
 type Tab = "stock" | "cargar" | "venta";
 
 export default function Camioneta() {
-  const [vendedorSeleccionado, setVendedorSeleccionado] = useState<Vendedor | null>(null);
+  const [vendedorSeleccionado] = useState<Vendedor>("david");
   const [tab, setTab] = useState<Tab>("stock");
   const { toast } = useToast();
 
-  const { data: stock, isLoading } = useCamionetaStock(vendedorSeleccionado ?? "michel");
+  const { data: stock, isLoading } = useCamionetaStock(vendedorSeleccionado);
 
   const queryClient = useQueryClient();
   const [caducadoDialog, setCaducadoDialog] = useState<StockItem | null>(null);
@@ -786,7 +792,7 @@ export default function Camioneta() {
   // el AlertDialog se cierra automáticamente al hacer click en AlertDialogAction
   const [pendingCaducado, setPendingCaducado] = useState<{ productoCodigo: string; cantidad: number } | null>(null);
 
-  const caducadoMutation = useCaducadoMutation(vendedorSeleccionado ?? "michel", () => {
+  const caducadoMutation = useCaducadoMutation(vendedorSeleccionado, () => {
     toast({ title: "Pérdida registrada correctamente" });
     setPendingCaducado(null);
     setCaducadoDialog(null);
@@ -810,48 +816,12 @@ export default function Camioneta() {
     { id: "venta", label: "Venta en Ruta", icon: ShoppingCart },
   ];
 
-  // ── Selector de vendedor ────────────────────────────────────────────────────
-  if (!vendedorSeleccionado) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Truck className="w-8 h-8 text-primary" /> Mi Camioneta
-        </h1>
-        <div className="max-w-sm mx-auto mt-12 space-y-6 text-center">
-          <div className="p-4 rounded-full bg-primary/10 w-20 h-20 flex items-center justify-center mx-auto">
-            <User className="w-10 h-10 text-primary" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold mb-1">¿Cuál es tu camioneta?</h2>
-            <p className="text-muted-foreground text-sm">Seleccioná tu nombre para ver y gestionar tu inventario</p>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {VENDEDORES.map(v => (
-              <button
-                key={v.username}
-                onClick={() => { setVendedorSeleccionado(v.username); setTab("stock"); }}
-                className="py-8 rounded-2xl border-2 font-bold text-xl transition-all border-border bg-card hover:border-primary hover:bg-primary/5 hover:text-primary"
-              >
-                {v.nombre}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const nombreVendedor = VENDEDORES.find(v => v.username === vendedorSeleccionado)?.nombre;
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Truck className="w-8 h-8 text-primary" /> Camioneta de {nombreVendedor}
+          <Truck className="w-8 h-8 text-primary" /> Mi Camioneta
         </h1>
-        <Button variant="outline" size="sm" onClick={() => { setVendedorSeleccionado(null); setTab("stock"); }}>
-          Cambiar
-        </Button>
       </div>
 
       <div className="flex gap-2 border-b border-border">
