@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: registroam
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: pnpm install --frozen-lockfile && pnpm run typecheck:libs && BASE_PATH=/ pnpm --filter @workspace/panaderia run build && pnpm --filter @workspace/api-server run build
+    startCommand: node artifacts/api-server/dist/index.mjs
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: registroam-db
+          property: connectionString
+
+databases:
+  - name: registroam-db
+    databaseName: registroam
+    user: registroam
+    region: oregon
+    plan: free

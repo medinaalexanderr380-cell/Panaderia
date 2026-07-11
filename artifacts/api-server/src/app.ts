@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import cors from "cors";
 import session from "express-session";
 import pinoHttp from "pino-http";
+import path from "path";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { seedAdminIfEmpty } from "./lib/seed-admin";
@@ -42,5 +43,23 @@ app.use(session({
 seedAdminIfEmpty().catch(err => logger.error({ err }, "Error seeding admin"));
 
 app.use("/api", router);
+
+// En producción externa, Express sirve el frontend estático
+if (process.env["NODE_ENV"] === "production" && !process.env["REPL_ID"]) {
+  const workspaceRoot = process.cwd().endsWith(
+    path.join("artifacts", "api-server")
+  )
+    ? path.resolve(process.cwd(), "../..")
+    : process.cwd();
+
+  const staticDir = path.resolve(workspaceRoot, "artifacts/panaderia/dist/public");
+
+  app.use(express.static(staticDir));
+
+  // SPA fallback — cualquier ruta que no sea /api sirve index.html
+  app.use((_req, res) => {
+    res.sendFile(path.join(staticDir, "index.html"));
+  });
+}
 
 export default app;
