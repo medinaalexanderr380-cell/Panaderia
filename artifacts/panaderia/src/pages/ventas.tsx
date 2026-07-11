@@ -23,6 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   Collapsible,
   CollapsibleContent,
@@ -30,7 +31,7 @@ import {
 } from "@/components/ui/collapsible";
 import {
   ShoppingCart, User, Search, Trash2, Calendar, Receipt,
-  ChevronDown, ChevronRight, Download, TrendingUp,
+  ChevronDown, ChevronRight, Download, TrendingUp, Printer,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from "date-fns";
@@ -40,6 +41,151 @@ import { es } from "date-fns/locale";
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
 
+/* ─── Ticket types ─────────────────────────────────────────────────────────── */
+interface TicketItem {
+  nombre: string;
+  cantidad: number;
+  precioUnitario: number;
+  subtotal: number;
+}
+interface TicketData {
+  id?: number;
+  fecha: string;
+  vendedor: string;
+  items: TicketItem[];
+  total: number;
+}
+
+/* ─── Ticket de impresión ──────────────────────────────────────────────────── */
+function TicketImpresion({ ticket, onClose }: { ticket: TicketData; onClose: () => void }) {
+  const fechaStr = (() => {
+    try { return format(parseISO(ticket.fecha), "dd/MM/yyyy HH:mm", { locale: es }); }
+    catch { return ticket.fecha; }
+  })();
+  const totalUnidades = ticket.items.reduce((s, i) => s + i.cantidad, 0);
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-[340px] p-0 overflow-hidden gap-0">
+        {/* CSS de impresión */}
+        <style>{`
+          @media print {
+            body * { visibility: hidden !important; }
+            #ticket-print-area, #ticket-print-area * { visibility: visible !important; }
+            #ticket-print-area {
+              position: fixed !important;
+              left: 0 !important;
+              top: 0 !important;
+              width: 80mm !important;
+              padding: 4mm !important;
+              font-family: 'Courier New', monospace !important;
+              font-size: 11pt !important;
+            }
+          }
+        `}</style>
+
+        {/* Barra de acción (oculta al imprimir) */}
+        <div className="print:hidden flex items-center justify-between px-4 py-3 bg-muted/40 border-b">
+          <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+            <Receipt className="w-3.5 h-3.5" /> Vista previa del ticket
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={onClose}>Cerrar</Button>
+            <Button size="sm" onClick={() => window.print()} className="gap-1.5">
+              <Printer className="w-3.5 h-3.5" /> Imprimir
+            </Button>
+          </div>
+        </div>
+
+        {/* Ticket */}
+        <div
+          id="ticket-print-area"
+          className="font-mono text-[12px] leading-snug p-5 bg-white text-black select-all"
+        >
+          {/* Encabezado */}
+          <div className="text-center mb-3">
+            <p className="font-bold text-[15px] tracking-widest">PANADERÍA PRO</p>
+            <p className="text-[10px] text-gray-500 tracking-wide">Control de Stock y Ventas</p>
+          </div>
+
+          <p className="text-center text-[10px] text-gray-400">{"─".repeat(36)}</p>
+
+          {/* Datos de la venta */}
+          <div className="my-2 space-y-0.5 text-[11px]">
+            {ticket.id && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">Ticket:</span>
+                <span className="font-bold">#{String(ticket.id).padStart(4, "0")}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-gray-500">Fecha:</span>
+              <span>{fechaStr}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">Vendedor:</span>
+              <span className="font-semibold">{ticket.vendedor}</span>
+            </div>
+          </div>
+
+          <p className="text-center text-[10px] text-gray-400">{"─".repeat(36)}</p>
+
+          {/* Encabezado de productos */}
+          <div className="flex justify-between text-[10px] text-gray-500 mt-2 mb-1 font-semibold uppercase tracking-wide">
+            <span className="flex-1">Producto</span>
+            <span className="w-8 text-center">Cant</span>
+            <span className="w-20 text-right">Precio</span>
+            <span className="w-20 text-right">Subtotal</span>
+          </div>
+
+          {/* Líneas de productos */}
+          <div className="space-y-1">
+            {ticket.items.map((item, idx) => (
+              <div key={idx}>
+                <p className="font-semibold truncate">{item.nombre}</p>
+                <div className="flex justify-between text-[11px] pl-2">
+                  <span className="flex-1 text-gray-500">
+                    {item.cantidad} × {fmt(item.precioUnitario)}
+                  </span>
+                  <span className="font-bold">{fmt(item.subtotal)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-center text-[10px] text-gray-400 mt-2">{"─".repeat(36)}</p>
+
+          {/* Totales */}
+          <div className="mt-2 space-y-0.5 text-[11px]">
+            <div className="flex justify-between text-gray-500">
+              <span>Productos</span>
+              <span>{ticket.items.length} {ticket.items.length === 1 ? "ítem" : "ítems"}</span>
+            </div>
+            <div className="flex justify-between text-gray-500">
+              <span>Unidades</span>
+              <span>{totalUnidades}</span>
+            </div>
+          </div>
+
+          <div className="flex justify-between items-center mt-2 pt-2 border-t border-black">
+            <span className="font-bold text-[14px] tracking-wide">TOTAL</span>
+            <span className="font-bold text-[16px]">{fmt(ticket.total)}</span>
+          </div>
+
+          <p className="text-center text-[10px] text-gray-400 mt-2">{"─".repeat(36)}</p>
+
+          {/* Pie */}
+          <div className="text-center mt-2 space-y-0.5">
+            <p className="font-semibold text-[11px]">¡Gracias por su compra!</p>
+            <p className="text-[10px] text-gray-400">Conserve su ticket</p>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── CartItem ─────────────────────────────────────────────────────────────── */
 interface CartItem {
   productoCodigo: string;
   productoNombre: string;
@@ -59,15 +205,30 @@ function POS() {
   const [codigoInput, setCodigoInput] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [previewProduct, setPreviewProduct] = useState<CartItem | null>(null);
+  const [ticketData, setTicketData] = useState<TicketData | null>(null);
   const codigoRef = useRef<HTMLInputElement>(null);
+  const savedCartRef = useRef<CartItem[]>([]);
+  const savedVendedorRef = useRef("");
 
   const { data: productos } = useListarProductos();
 
   const registrarVenta = useRegistrarVenta({
     mutation: {
-      onSuccess: () => {
+      onSuccess: (data: any) => {
         queryClient.invalidateQueries({ queryKey: getListarDiasConVentasQueryKey() });
-        toast({ title: "Venta registrada exitosamente" });
+        const ticket: TicketData = {
+          id: data?.id,
+          fecha: data?.fecha ?? new Date().toISOString(),
+          vendedor: savedVendedorRef.current,
+          items: savedCartRef.current.map((i) => ({
+            nombre: i.productoNombre,
+            cantidad: i.cantidad,
+            precioUnitario: i.precioUnitario,
+            subtotal: i.subtotal,
+          })),
+          total: savedCartRef.current.reduce((s, i) => s + i.subtotal, 0),
+        };
+        setTicketData(ticket);
         setCart([]);
         setPreviewProduct(null);
         setCodigoInput("");
@@ -157,6 +318,8 @@ function POS() {
       toast({ title: "Carrito vacío", variant: "destructive" });
       return;
     }
+    savedCartRef.current = cart;
+    savedVendedorRef.current = vendedor;
     registrarVenta.mutate({
       data: {
         vendedor,
@@ -166,151 +329,157 @@ function POS() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Left: form + cart */}
-      <Card className="lg:col-span-2 shadow-md border-primary/20">
-        <CardHeader className="bg-primary/5 border-b border-primary/10 pb-4">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Receipt className="w-5 h-5 text-primary" />
-            Nueva Venta
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6 space-y-5">
-          {/* Vendor + code fields */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="sm:w-1/3">
-              <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Vendedor</label>
-              <div className="relative">
-                <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Nombre..."
-                  className="pl-8"
-                  value={vendedor}
-                  onChange={(e) => setVendedor(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="flex-1">
-              <label className="text-sm font-medium text-muted-foreground mb-1.5 block">
-                Código de producto
-              </label>
-              <form onSubmit={handleAddProduct} className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+    <>
+      {ticketData && (
+        <TicketImpresion ticket={ticketData} onClose={() => setTicketData(null)} />
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: form + cart */}
+        <Card className="lg:col-span-2 shadow-md border-primary/20">
+          <CardHeader className="bg-primary/5 border-b border-primary/10 pb-4">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Receipt className="w-5 h-5 text-primary" />
+              Nueva Venta
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 space-y-5">
+            {/* Vendor + code fields */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="sm:w-1/3">
+                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Vendedor</label>
+                <div className="relative">
+                  <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    ref={codigoRef}
-                    placeholder="Escanea o escribe el código y presiona Enter..."
-                    className="pl-8 font-mono"
-                    value={codigoInput}
-                    onChange={(e) => setCodigoInput(e.target.value)}
+                    placeholder="Nombre..."
+                    className="pl-8"
+                    value={vendedor}
+                    onChange={(e) => setVendedor(e.target.value)}
                   />
                 </div>
-                <Button type="submit" variant="secondary">Agregar</Button>
-              </form>
-            </div>
-          </div>
-
-          {/* Product preview card */}
-          {previewProduct && (
-            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-              <p className="text-xs text-muted-foreground font-mono mb-0.5">{previewProduct.productoCodigo}</p>
-              <p className="font-semibold text-foreground">{previewProduct.productoNombre}</p>
-              <p className="text-sm text-muted-foreground mt-1">{previewProduct.productoDescripcion}</p>
-              <div className="flex gap-6 mt-2 text-sm">
-                <span>
-                  Precio: <strong className="text-primary">{fmt(previewProduct.precioUnitario)}</strong>
-                </span>
-                <span>
-                  Stock: <strong className={previewProduct.stockDisponible <= 5 ? "text-destructive" : "text-foreground"}>
-                    {previewProduct.stockDisponible} {previewProduct.stockDisponible === 1 ? "unidad" : "unidades"}
-                  </strong>
-                </span>
+              </div>
+              <div className="flex-1">
+                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">
+                  Código de producto
+                </label>
+                <form onSubmit={handleAddProduct} className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      ref={codigoRef}
+                      placeholder="Escanea o escribe el código y presiona Enter..."
+                      className="pl-8 font-mono"
+                      value={codigoInput}
+                      onChange={(e) => setCodigoInput(e.target.value)}
+                    />
+                  </div>
+                  <Button type="submit" variant="secondary">Agregar</Button>
+                </form>
               </div>
             </div>
-          )}
 
-          {/* Cart table */}
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
-              <TableHeader className="bg-muted/50">
-                <TableRow>
-                  <TableHead className="w-24">Código</TableHead>
-                  <TableHead>Producto</TableHead>
-                  <TableHead className="text-right">Precio</TableHead>
-                  <TableHead className="text-center w-36">Cantidad</TableHead>
-                  <TableHead className="text-right">Subtotal</TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {cart.length === 0 ? (
+            {/* Product preview card */}
+            {previewProduct && (
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+                <p className="text-xs text-muted-foreground font-mono mb-0.5">{previewProduct.productoCodigo}</p>
+                <p className="font-semibold text-foreground">{previewProduct.productoNombre}</p>
+                <p className="text-sm text-muted-foreground mt-1">{previewProduct.productoDescripcion}</p>
+                <div className="flex gap-6 mt-2 text-sm">
+                  <span>
+                    Precio: <strong className="text-primary">{fmt(previewProduct.precioUnitario)}</strong>
+                  </span>
+                  <span>
+                    Stock: <strong className={previewProduct.stockDisponible <= 5 ? "text-destructive" : "text-foreground"}>
+                      {previewProduct.stockDisponible} {previewProduct.stockDisponible === 1 ? "unidad" : "unidades"}
+                    </strong>
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Cart table */}
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-muted/50">
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
-                      El carrito está vacío. Escanea un código para comenzar.
-                    </TableCell>
+                    <TableHead className="w-24">Código</TableHead>
+                    <TableHead>Producto</TableHead>
+                    <TableHead className="text-right">Precio</TableHead>
+                    <TableHead className="text-center w-36">Cantidad</TableHead>
+                    <TableHead className="text-right">Subtotal</TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
-                ) : (
-                  cart.map((item) => (
-                    <TableRow key={item.productoCodigo} className="group">
-                      <TableCell className="font-mono text-xs">{item.productoCodigo}</TableCell>
-                      <TableCell className="font-medium">{item.productoNombre}</TableCell>
-                      <TableCell className="text-right">{fmt(item.precioUnitario)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-center gap-2">
-                          <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQty(item.productoCodigo, -1)}>−</Button>
-                          <span className="w-8 text-center font-bold">{item.cantidad}</span>
-                          <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQty(item.productoCodigo, 1)}>+</Button>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-bold">{fmt(item.subtotal)}</TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost" size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => removeItem(item.productoCodigo)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                </TableHeader>
+                <TableBody>
+                  {cart.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                        El carrito está vacío. Escanea un código para comenzar.
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                  ) : (
+                    cart.map((item) => (
+                      <TableRow key={item.productoCodigo} className="group">
+                        <TableCell className="font-mono text-xs">{item.productoCodigo}</TableCell>
+                        <TableCell className="font-medium">{item.productoNombre}</TableCell>
+                        <TableCell className="text-right">{fmt(item.precioUnitario)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-center gap-2">
+                            <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQty(item.productoCodigo, -1)}>−</Button>
+                            <span className="w-8 text-center font-bold">{item.cantidad}</span>
+                            <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQty(item.productoCodigo, 1)}>+</Button>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-bold">{fmt(item.subtotal)}</TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost" size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => removeItem(item.productoCodigo)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Right: summary */}
-      <Card className="shadow-md flex flex-col">
-        <CardHeader className="bg-muted/30 border-b pb-4">
-          <CardTitle className="text-lg">Resumen</CardTitle>
-        </CardHeader>
-        <CardContent className="p-6 flex-1 flex flex-col justify-between">
-          <div className="space-y-3 mb-6">
-            <div className="flex justify-between text-muted-foreground text-sm">
-              <span>Productos distintos</span>
-              <span>{cart.length}</span>
+        {/* Right: summary */}
+        <Card className="shadow-md flex flex-col">
+          <CardHeader className="bg-muted/30 border-b pb-4">
+            <CardTitle className="text-lg">Resumen</CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 flex-1 flex flex-col justify-between">
+            <div className="space-y-3 mb-6">
+              <div className="flex justify-between text-muted-foreground text-sm">
+                <span>Productos distintos</span>
+                <span>{cart.length}</span>
+              </div>
+              <div className="flex justify-between text-muted-foreground text-sm">
+                <span>Total unidades</span>
+                <span>{cart.reduce((s, i) => s + i.cantidad, 0)}</span>
+              </div>
+              <div className="border-t pt-3 flex justify-between text-2xl font-bold">
+                <span>Total</span>
+                <span className="text-primary">{fmt(cartTotal)}</span>
+              </div>
             </div>
-            <div className="flex justify-between text-muted-foreground text-sm">
-              <span>Total unidades</span>
-              <span>{cart.reduce((s, i) => s + i.cantidad, 0)}</span>
-            </div>
-            <div className="border-t pt-3 flex justify-between text-2xl font-bold">
-              <span>Total</span>
-              <span className="text-primary">{fmt(cartTotal)}</span>
-            </div>
-          </div>
-          <Button
-            className="w-full h-14 text-lg font-semibold"
-            onClick={handleConfirm}
-            disabled={cart.length === 0 || registrarVenta.isPending}
-          >
-            {registrarVenta.isPending ? "Procesando..." : "Confirmar Venta"}
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
+            <Button
+              className="w-full h-14 text-lg font-semibold"
+              onClick={handleConfirm}
+              disabled={cart.length === 0 || registrarVenta.isPending}
+            >
+              {registrarVenta.isPending ? "Procesando..." : "Confirmar Venta"}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    </>
   );
 }
 
@@ -320,6 +489,7 @@ function DiaGroup({ dia }: { dia: { fecha: string; totalVentas: number; totalGan
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ type: "venta" | "dia"; id?: number; label: string } | null>(null);
+  const [ticketData, setTicketData] = useState<TicketData | null>(null);
 
   const eliminarVenta = useEliminarVenta({
     mutation: {
@@ -363,11 +533,31 @@ function DiaGroup({ dia }: { dia: { fecha: string; totalVentas: number; totalGan
     }
   };
 
+  const openTicket = (venta: any) => {
+    const items: TicketItem[] = (venta.items ?? []).map((item: any) => ({
+      nombre: item.productoNombre,
+      cantidad: item.cantidad,
+      precioUnitario: item.precioUnitario ?? 0,
+      subtotal: (item.cantidad ?? 0) * (item.precioUnitario ?? 0),
+    }));
+    setTicketData({
+      id: venta.id,
+      fecha: venta.fecha,
+      vendedor: venta.vendedor,
+      items,
+      total: venta.total,
+    });
+  };
+
   const fechaLabel = format(parseISO(dia.fecha + "T00:00:00"), "EEEE d 'de' MMMM yyyy", { locale: es });
   const margen = dia.totalVentas > 0 ? ((dia.totalGanancia / dia.totalVentas) * 100).toFixed(1) : "0.0";
 
   return (
     <>
+      {ticketData && (
+        <TicketImpresion ticket={ticketData} onClose={() => setTicketData(null)} />
+      )}
+
       <Collapsible open={open} onOpenChange={setOpen}>
         {/* Day header */}
         <div className="border rounded-xl overflow-hidden mb-3 shadow-sm">
@@ -399,7 +589,6 @@ function DiaGroup({ dia }: { dia: { fecha: string; totalVentas: number; totalGan
                   </div>
                 </div>
 
-                {/* Action buttons — stop propagation so they don't toggle open */}
                 <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                   <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleDownload}>
                     <Download className="w-3.5 h-3.5" />
@@ -430,7 +619,7 @@ function DiaGroup({ dia }: { dia: { fecha: string; totalVentas: number; totalGan
                     <TableHead>Productos</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-right">Ganancia</TableHead>
-                    <TableHead className="w-12" />
+                    <TableHead className="w-20" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -455,13 +644,24 @@ function DiaGroup({ dia }: { dia: { fecha: string; totalVentas: number; totalGan
                       <TableCell className="text-right font-bold">{fmt(venta.total)}</TableCell>
                       <TableCell className="text-right font-medium text-primary">{fmt(venta.ganancia)}</TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost" size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                          onClick={() => setConfirmDelete({ type: "venta", id: venta.id, label: `venta #${String(venta.id).padStart(4, "0")}` })}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex gap-1 justify-end">
+                          <Button
+                            variant="ghost" size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-primary"
+                            title="Imprimir ticket"
+                            onClick={() => openTicket(venta)}
+                          >
+                            <Printer className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost" size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            title="Eliminar venta"
+                            onClick={() => setConfirmDelete({ type: "venta", id: venta.id, label: `venta #${String(venta.id).padStart(4, "0")}` })}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
