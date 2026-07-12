@@ -12,8 +12,9 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Truck, Plus, Trash2, ShoppingCart, AlertTriangle, ArrowDownToLine, Lock, CheckCircle, Undo2 } from "lucide-react";
+import { Truck, Plus, Trash2, ShoppingCart, AlertTriangle, ArrowDownToLine, Lock, CheckCircle, Undo2, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { TicketImpresion, type TicketData } from "@/components/ticket-impresion";
 
 const fmt = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
 
@@ -656,11 +657,25 @@ function TabVentaRuta({ vendedor, stock, onCaducado }: { vendedor: Vendedor; sto
   const [credOpen, setCredOpen] = useState(false);
   const [credError, setCredError] = useState("");
   const [verifying, setVerifying] = useState(false);
+  const [ticketData, setTicketData] = useState<TicketData | null>(null);
+  const savedCartRef = useRef<CartItem[]>([]);
 
   const nombre = VENDEDORES.find(v => v.username === vendedor)?.nombre;
 
   const ventaMutation = useVentaRutaMutation(vendedor, () => {
-    toast({ title: "Venta en ruta registrada" });
+    const ticket: TicketData = {
+      fecha: new Date().toISOString(),
+      vendedor: nombre ?? vendedor,
+      origen: "camioneta",
+      items: savedCartRef.current.map(i => ({
+        nombre: i.productoNombre,
+        cantidad: i.cantidad,
+        precioUnitario: i.precioUnitario,
+        subtotal: i.cantidad * i.precioUnitario,
+      })),
+      total: savedCartRef.current.reduce((s, i) => s + i.cantidad * i.precioUnitario, 0),
+    };
+    setTicketData(ticket);
     setCart([]);
   });
 
@@ -691,10 +706,15 @@ function TabVentaRuta({ vendedor, stock, onCaducado }: { vendedor: Vendedor; sto
     setVerifying(false);
     if (!result.ok) { setCredError(result.error!); return; }
     setCredOpen(false);
+    savedCartRef.current = cart;
     ventaMutation.mutate(cart.map(i => ({ productoCodigo: i.productoCodigo, cantidad: i.cantidad })));
   };
 
   return (
+    <>
+      {ticketData && (
+        <TicketImpresion ticket={ticketData} onClose={() => setTicketData(null)} />
+      )}
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <Card className="lg:col-span-2">
         <CardHeader className="bg-primary/5 border-b pb-4">
@@ -769,6 +789,7 @@ function TabVentaRuta({ vendedor, stock, onCaducado }: { vendedor: Vendedor; sto
         titulo="Confirmar venta en ruta"
       />
     </div>
+    </>
   );
 }
 

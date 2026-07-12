@@ -23,7 +23,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   Collapsible,
   CollapsibleContent,
@@ -36,154 +35,11 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
+import { TicketImpresion, type TicketData, type TicketItem } from "@/components/ticket-impresion";
 
 /* ─── helpers ─────────────────────────────────────────────────────────────── */
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
-
-/* ─── Ticket types ─────────────────────────────────────────────────────────── */
-interface TicketItem {
-  nombre: string;
-  cantidad: number;
-  precioUnitario: number;
-  subtotal: number;
-}
-interface TicketData {
-  id?: number;
-  fecha: string;
-  vendedor: string;
-  items: TicketItem[];
-  total: number;
-}
-
-/* ─── Ticket de impresión ──────────────────────────────────────────────────── */
-function TicketImpresion({ ticket, onClose }: { ticket: TicketData; onClose: () => void }) {
-  const fechaStr = (() => {
-    try { return format(parseISO(ticket.fecha), "dd/MM/yyyy HH:mm", { locale: es }); }
-    catch { return ticket.fecha; }
-  })();
-  const totalUnidades = ticket.items.reduce((s, i) => s + i.cantidad, 0);
-
-  return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-[340px] p-0 overflow-hidden gap-0">
-        {/* CSS de impresión */}
-        <style>{`
-          @media print {
-            body * { visibility: hidden !important; }
-            #ticket-print-area, #ticket-print-area * { visibility: visible !important; }
-            #ticket-print-area {
-              position: fixed !important;
-              left: 0 !important;
-              top: 0 !important;
-              width: 80mm !important;
-              padding: 4mm !important;
-              font-family: 'Courier New', monospace !important;
-              font-size: 11pt !important;
-            }
-          }
-        `}</style>
-
-        {/* Barra de acción (oculta al imprimir) */}
-        <div className="print:hidden flex items-center justify-between px-4 py-3 bg-muted/40 border-b">
-          <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-            <Receipt className="w-3.5 h-3.5" /> Vista previa del ticket
-          </span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onClose}>Cerrar</Button>
-            <Button size="sm" onClick={() => window.print()} className="gap-1.5">
-              <Printer className="w-3.5 h-3.5" /> Imprimir
-            </Button>
-          </div>
-        </div>
-
-        {/* Ticket */}
-        <div
-          id="ticket-print-area"
-          className="font-mono text-[12px] leading-snug p-5 bg-white text-black select-all"
-        >
-          {/* Encabezado */}
-          <div className="text-center mb-3">
-            <p className="font-bold text-[15px] tracking-widest">REGISTROAM</p>
-            <p className="text-[10px] text-gray-500 tracking-wide">Sistema de Gestión</p>
-          </div>
-
-          <p className="text-center text-[10px] text-gray-400">{"─".repeat(36)}</p>
-
-          {/* Datos de la venta */}
-          <div className="my-2 space-y-0.5 text-[11px]">
-            {ticket.id && (
-              <div className="flex justify-between">
-                <span className="text-gray-500">Ticket:</span>
-                <span className="font-bold">#{String(ticket.id).padStart(4, "0")}</span>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <span className="text-gray-500">Fecha:</span>
-              <span>{fechaStr}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Vendedor:</span>
-              <span className="font-semibold">{ticket.vendedor}</span>
-            </div>
-          </div>
-
-          <p className="text-center text-[10px] text-gray-400">{"─".repeat(36)}</p>
-
-          {/* Encabezado de productos */}
-          <div className="flex justify-between text-[10px] text-gray-500 mt-2 mb-1 font-semibold uppercase tracking-wide">
-            <span className="flex-1">Producto</span>
-            <span className="w-8 text-center">Cant</span>
-            <span className="w-20 text-right">Precio</span>
-            <span className="w-20 text-right">Subtotal</span>
-          </div>
-
-          {/* Líneas de productos */}
-          <div className="space-y-1">
-            {ticket.items.map((item, idx) => (
-              <div key={idx}>
-                <p className="font-semibold truncate">{item.nombre}</p>
-                <div className="flex justify-between text-[11px] pl-2">
-                  <span className="flex-1 text-gray-500">
-                    {item.cantidad} × {fmt(item.precioUnitario)}
-                  </span>
-                  <span className="font-bold">{fmt(item.subtotal)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <p className="text-center text-[10px] text-gray-400 mt-2">{"─".repeat(36)}</p>
-
-          {/* Totales */}
-          <div className="mt-2 space-y-0.5 text-[11px]">
-            <div className="flex justify-between text-gray-500">
-              <span>Productos</span>
-              <span>{ticket.items.length} {ticket.items.length === 1 ? "ítem" : "ítems"}</span>
-            </div>
-            <div className="flex justify-between text-gray-500">
-              <span>Unidades</span>
-              <span>{totalUnidades}</span>
-            </div>
-          </div>
-
-          <div className="flex justify-between items-center mt-2 pt-2 border-t border-black">
-            <span className="font-bold text-[14px] tracking-wide">TOTAL</span>
-            <span className="font-bold text-[16px]">{fmt(ticket.total)}</span>
-          </div>
-
-          <p className="text-center text-[10px] text-gray-400 mt-2">{"─".repeat(36)}</p>
-
-          {/* Pie */}
-          <div className="text-center mt-2 space-y-0.5">
-            <p className="font-semibold text-[11px]">¡Gracias por su compra!</p>
-            <p className="text-[10px] text-gray-400">Conserve su ticket</p>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 /* ─── CartItem ─────────────────────────────────────────────────────────────── */
 interface CartItem {
