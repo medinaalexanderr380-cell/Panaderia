@@ -155,6 +155,41 @@ export interface RegistrarCompraBody {
   items: ItemCompraInput[];
 }
 
+export interface ComboItem {
+  productoCodigo: string;
+  productoNombre: string;
+  cantidad: number;
+  precioUnitario: number;
+}
+
+export interface Combo {
+  id: number;
+  nombre: string;
+  descripcion: string;
+  precioVenta: number;
+  activo: boolean;
+  creadoEn: string;
+  actualizadoEn: string;
+  items: ComboItem[];
+}
+
+export interface ComboItemInput {
+  /** @minLength 1 */
+  productoCodigo: string;
+  /** @minimum 1 */
+  cantidad: number;
+}
+
+export interface ComboInput {
+  /** @minLength 1 */
+  nombre: string;
+  descripcion?: string;
+  /** @minimum 0 */
+  precioVenta: number;
+  /** @minItems 1 */
+  items: ComboItemInput[];
+}
+
 export interface ResumenFinanciero {
   totalVentas: number;
   totalInvertido: number;

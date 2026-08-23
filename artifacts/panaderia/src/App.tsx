@@ -7,6 +7,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Productos from "@/pages/productos";
+import Combos from "@/pages/combos";
 import Ventas from "@/pages/ventas";
 import Compras from "@/pages/compras";
 import Proveedores from "@/pages/proveedores";
@@ -30,6 +31,7 @@ function App() {
             <Switch>
               <Route path="/" component={Dashboard} />
               <Route path="/productos" component={Productos} />
+              <Route path="/combos" component={Combos} />
               <Route path="/ventas" component={Ventas} />
               <Route path="/compras" component={Compras} />
               <Route path="/proveedores" component={Proveedores} />

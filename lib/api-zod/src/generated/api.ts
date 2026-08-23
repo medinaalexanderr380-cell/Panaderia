@@ -481,6 +481,48 @@ export const RegistrarCompraBody = zod.object({
 });
 
 /**
+ * @summary List all product combos
+ */
+export const ListarCombosResponseItem = zod.object({
+  id: zod.number(),
+  nombre: zod.string(),
+  descripcion: zod.string(),
+  precioVenta: zod.number(),
+  activo: zod.boolean(),
+  creadoEn: zod.string(),
+  actualizadoEn: zod.string(),
+  items: zod.array(
+    zod.object({
+      productoCodigo: zod.string(),
+      productoNombre: zod.string(),
+      cantidad: zod.number(),
+      precioUnitario: zod.number(),
+    }),
+  ),
+});
+export const ListarCombosResponse = zod.array(ListarCombosResponseItem);
+
+/**
+ * @summary Create a product combo
+ */
+
+export const crearComboBodyPrecioVentaMin = 0;
+
+export const CrearComboBody = zod.object({
+  nombre: zod.string().min(1),
+  descripcion: zod.string().optional(),
+  precioVenta: zod.number().min(crearComboBodyPrecioVentaMin),
+  items: zod
+    .array(
+      zod.object({
+        productoCodigo: zod.string().min(1),
+        cantidad: zod.number().min(1),
+      }),
+    )
+    .min(1),
+});
+
+/**
  * @summary Get financial summary (investment, revenue, profit)
  */
 export const ObtenerResumenQueryParams = zod.object({

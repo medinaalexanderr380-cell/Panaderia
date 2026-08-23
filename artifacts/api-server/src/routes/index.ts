@@ -11,6 +11,7 @@ import perdidasRouter from "./perdidas";
 import usuariosRouter from "./usuarios";
 import gastosRouter from "./gastos";
 import adminRouter from "./admin";
+import combosRouter from "./combos";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use("/perdidas", perdidasRouter);
 router.use("/usuarios", usuariosRouter);
 router.use("/gastos", gastosRouter);
 router.use("/admin", adminRouter);
+router.use("/combos", combosRouter);
 
 export default router;

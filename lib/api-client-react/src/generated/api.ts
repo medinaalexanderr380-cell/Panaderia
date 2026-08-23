@@ -18,6 +18,8 @@ import type {
 
 import type {
   ActualizarProductoBody,
+  Combo,
+  ComboInput,
   Compra,
   CrearProductoBody,
   CrearProveedorBody,
@@ -2006,6 +2008,165 @@ export const useRegistrarCompra = <
   TContext
 > => {
   return useMutation(getRegistrarCompraMutationOptions(options));
+};
+
+/**
+ * @summary List all product combos
+ */
+export const getListarCombosUrl = () => {
+  return `/api/combos`;
+};
+
+export const listarCombos = async (options?: RequestInit): Promise<Combo[]> => {
+  return customFetch<Combo[]>(getListarCombosUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListarCombosQueryKey = () => {
+  return [`/api/combos`] as const;
+};
+
+export const getListarCombosQueryOptions = <
+  TData = Awaited<ReturnType<typeof listarCombos>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listarCombos>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListarCombosQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listarCombos>>> = ({
+    signal,
+  }) => listarCombos({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listarCombos>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListarCombosQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listarCombos>>
+>;
+export type ListarCombosQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all product combos
+ */
+
+export function useListarCombos<
+  TData = Awaited<ReturnType<typeof listarCombos>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listarCombos>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListarCombosQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a product combo
+ */
+export const getCrearComboUrl = () => {
+  return `/api/combos`;
+};
+
+export const crearCombo = async (
+  comboInput: ComboInput,
+  options?: RequestInit,
+): Promise<Combo> => {
+  return customFetch<Combo>(getCrearComboUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(comboInput),
+  });
+};
+
+export const getCrearComboMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof crearCombo>>,
+    TError,
+    { data: BodyType<ComboInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof crearCombo>>,
+  TError,
+  { data: BodyType<ComboInput> },
+  TContext
+> => {
+  const mutationKey = ["crearCombo"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof crearCombo>>,
+    { data: BodyType<ComboInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return crearCombo(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CrearComboMutationResult = NonNullable<
+  Awaited<ReturnType<typeof crearCombo>>
+>;
+export type CrearComboMutationBody = BodyType<ComboInput>;
+export type CrearComboMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a product combo
+ */
+export const useCrearCombo = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof crearCombo>>,
+    TError,
+    { data: BodyType<ComboInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof crearCombo>>,
+  TError,
+  { data: BodyType<ComboInput> },
+  TContext
+> => {
+  return useMutation(getCrearComboMutationOptions(options));
 };
 
 /**

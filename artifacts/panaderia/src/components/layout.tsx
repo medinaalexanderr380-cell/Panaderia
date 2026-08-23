@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import {
   Store, ShoppingCart, Package, Users, BarChart, Truck, ShieldCheck, AlertTriangle, ShoppingBag, Receipt,
-  WifiOff, Loader2,
+  WifiOff, Loader2, Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState, useRef } from "react";
@@ -85,6 +85,7 @@ export function Layout({ children }: LayoutProps) {
     { name: "Inicio", href: "/", icon: Store },
     { name: "Ventas", href: "/ventas", icon: ShoppingCart },
     { name: "Productos", href: "/productos", icon: Package },
+    { name: "Combos", href: "/combos", icon: Layers },
     { name: "Compras", href: "/compras", icon: ShoppingBag },
     { name: "Camioneta", href: "/camioneta", icon: Truck },
     { name: "Proveedores", href: "/proveedores", icon: Users },
@@ -100,6 +101,7 @@ export function Layout({ children }: LayoutProps) {
   const mobileNav = [
     { name: "Inicio", href: "/", icon: Store },
     { name: "Ventas", href: "/ventas", icon: ShoppingCart },
+    { name: "Combos", href: "/combos", icon: Layers },
     { name: "Camioneta", href: "/camioneta", icon: Truck },
     { name: "Compras", href: "/compras", icon: ShoppingBag },
     { name: "Pérdidas", href: "/perdidas", icon: AlertTriangle },
@@ -188,7 +190,7 @@ export function Layout({ children }: LayoutProps) {
         </main>
 
         <nav className="fixed bottom-0 left-0 right-0 z-50 bg-sidebar border-t border-sidebar-border">
-          <div className="grid grid-cols-5 h-16">
+          <div className="grid grid-cols-6 h-16">
             {mobileNav.map((item) => (
               <Link
                 key={item.name}

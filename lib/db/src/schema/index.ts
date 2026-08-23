@@ -5,3 +5,4 @@ export * from "./compras";
 export * from "./usuarios";
 export * from "./perdidas";
 export * from "./gastos";
+export * from "./combos";

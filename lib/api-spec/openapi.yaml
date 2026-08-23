@@ -17,6 +17,8 @@ tags:
     description: Sales operations
   - name: compras
     description: Purchase operations
+  - name: combos
+    description: Product combo management
   - name: reportes
     description: Reports and analytics
 
@@ -467,6 +469,38 @@ paths:
               schema:
                 $ref: "#/components/schemas/Compra"
 
+  /combos:
+    get:
+      operationId: listarCombos
+      tags: [combos]
+      summary: List all product combos
+      responses:
+        "200":
+          description: List of combos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Combo"
+    post:
+      operationId: crearCombo
+      tags: [combos]
+      summary: Create a product combo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComboInput"
+      responses:
+        "201":
+          description: Created combo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Combo"
+
   /reportes/resumen:
     get:
       operationId: obtenerResumen
@@ -838,6 +872,71 @@ components:
           items:
             $ref: "#/components/schemas/ItemCompraInput"
       required: [proveedor, items]
+
+    Combo:
+      type: object
+      properties:
+        id:
+          type: integer
+        nombre:
+          type: string
+        descripcion:
+          type: string
+        precioVenta:
+          type: number
+        activo:
+          type: boolean
+        creadoEn:
+          type: string
+        actualizadoEn:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComboItem"
+      required: [id, nombre, descripcion, precioVenta, activo, creadoEn, actualizadoEn, items]
+
+    ComboItem:
+      type: object
+      properties:
+        productoCodigo:
+          type: string
+        productoNombre:
+          type: string
+        cantidad:
+          type: integer
+        precioUnitario:
+          type: number
+      required: [productoCodigo, productoNombre, cantidad, precioUnitario]
+
+    ComboInput:
+      type: object
+      properties:
+        nombre:
+          type: string
+          minLength: 1
+        descripcion:
+          type: string
+        precioVenta:
+          type: number
+          minimum: 0
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/ComboItemInput"
+      required: [nombre, precioVenta, items]
+
+    ComboItemInput:
+      type: object
+      properties:
+        productoCodigo:
+          type: string
+          minLength: 1
+        cantidad:
+          type: integer
+          minimum: 1
+      required: [productoCodigo, cantidad]
 
     ItemCompraInput:
       type: object
