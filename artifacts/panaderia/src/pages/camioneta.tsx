@@ -15,19 +15,21 @@ import {
 import { Truck, Plus, Trash2, ShoppingCart, AlertTriangle, ArrowDownToLine, Lock, CheckCircle, Undo2, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { TicketImpresion, type TicketData } from "@/components/ticket-impresion";
+import {
+  getListarCamionetasQueryKey,
+  useCrearCamioneta,
+  useEliminarCamioneta,
+  useListarCamionetas,
+} from "@workspace/api-client-react";
 
 const fmt = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
 
-type Vendedor = "michel" | "david";
+type Vendedor = string;
 
 interface StockItem { codigo: string; nombre: string; stockCamioneta: number; precioVenta: number; precioCosto: number; unidad: string; descripcion: string }
 interface CartItem { productoCodigo: string; productoNombre: string; cantidad: number; precioUnitario: number }
 interface CargaItem { productoCodigo: string; productoNombre: string; cantidad: number; proveedor: string }
-
-const VENDEDORES: { username: Vendedor; nombre: string }[] = [
-  { username: "michel", nombre: "Michel" },
-  { username: "david", nombre: "David" },
-];
+interface Camioneta { id: number; codigo: string; nombre: string; activo: boolean; stockTotal: number; creadoEn: string }
 
 const DEV_PASSWORD = "04052005";
 
@@ -93,6 +95,7 @@ function useCaducadoMutation(vendedor: Vendedor, onSuccess: () => void) {
 interface CredDialogProps {
   open: boolean;
   vendedor: Vendedor;
+  nombreCamioneta?: string;
   onOpenChange: (v: boolean) => void;
   onConfirm: (password: string) => void;
   isPending: boolean;
@@ -101,9 +104,9 @@ interface CredDialogProps {
   descripcion?: string;
 }
 
-function CredDialog({ open, vendedor, onOpenChange, onConfirm, isPending, error, titulo, descripcion }: CredDialogProps) {
+function CredDialog({ open, vendedor, nombreCamioneta, onOpenChange, onConfirm, isPending, error, titulo, descripcion }: CredDialogProps) {
   const [password, setPassword] = useState("");
-  const nombre = VENDEDORES.find(v => v.username === vendedor)?.nombre ?? vendedor;
+  const nombre = nombreCamioneta ?? vendedor;
 
   const handleClose = (v: boolean) => {
     if (!v) setPassword("");
@@ -164,8 +167,8 @@ async function verificarCredenciales(username: string, password: string): Promis
 }
 
 // ─── Pestaña: Stock ───────────────────────────────────────────────────────────
-function TabStock({ vendedor, stock, isLoading, onCaducado }: { vendedor: Vendedor; stock: StockItem[] | undefined; isLoading: boolean; onCaducado: (item: StockItem) => void }) {
-  const nombre = VENDEDORES.find(v => v.username === vendedor)?.nombre;
+function TabStock({ vendedor, nombreCamioneta, stock, isLoading, onCaducado }: { vendedor: Vendedor; nombreCamioneta: string; stock: StockItem[] | undefined; isLoading: boolean; onCaducado: (item: StockItem) => void }) {
+  const nombre = nombreCamioneta;
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -317,6 +320,7 @@ function TabStock({ vendedor, stock, isLoading, onCaducado }: { vendedor: Vended
       <CredDialog
         open={credOpen}
         vendedor={vendedor}
+        nombreCamioneta={nombre}
         onOpenChange={open => { setCredOpen(open); if (!open) setCredError(""); }}
         onConfirm={handleCredConfirm}
         isPending={verifying}
@@ -454,7 +458,7 @@ function AutocompleteStock({
 }
 
 // ─── Pestaña: Cargar ──────────────────────────────────────────────────────────
-function TabCargar({ vendedor }: { vendedor: Vendedor }) {
+function TabCargar({ vendedor, nombreCamioneta }: { vendedor: Vendedor; nombreCamioneta: string }) {
   const { toast } = useToast();
   const [items, setItems] = useState<CargaItem[]>([]);
   const [nombreInput, setNombreInput] = useState("");
@@ -464,7 +468,7 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
   const [credError, setCredError] = useState("");
   const [verifying, setVerifying] = useState(false);
 
-  const nombre = VENDEDORES.find(v => v.username === vendedor)?.nombre;
+  const nombre = nombreCamioneta;
 
   const { data: todosProductos } = useQuery<{ codigo: string; nombre: string; descripcion: string; stock: number }[]>({
     queryKey: ["productos-lista"],
@@ -638,6 +642,7 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
       <CredDialog
         open={credOpen}
         vendedor={vendedor}
+        nombreCamioneta={nombre}
         onOpenChange={setCredOpen}
         onConfirm={handleVerifyAndLoad}
         isPending={verifying}
@@ -650,7 +655,7 @@ function TabCargar({ vendedor }: { vendedor: Vendedor }) {
 }
 
 // ─── Pestaña: Venta en Ruta ───────────────────────────────────────────────────
-function TabVentaRuta({ vendedor, stock, onCaducado }: { vendedor: Vendedor; stock: StockItem[] | undefined; onCaducado: (item: StockItem) => void }) {
+function TabVentaRuta({ vendedor, nombreCamioneta, stock, onCaducado }: { vendedor: Vendedor; nombreCamioneta: string; stock: StockItem[] | undefined; onCaducado: (item: StockItem) => void }) {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -660,7 +665,7 @@ function TabVentaRuta({ vendedor, stock, onCaducado }: { vendedor: Vendedor; sto
   const [ticketData, setTicketData] = useState<TicketData | null>(null);
   const savedCartRef = useRef<CartItem[]>([]);
 
-  const nombre = VENDEDORES.find(v => v.username === vendedor)?.nombre;
+  const nombre = nombreCamioneta;
 
   const ventaMutation = useVentaRutaMutation(vendedor, () => {
     const ticket: TicketData = {
@@ -782,6 +787,7 @@ function TabVentaRuta({ vendedor, stock, onCaducado }: { vendedor: Vendedor; sto
       <CredDialog
         open={credOpen}
         vendedor={vendedor}
+        nombreCamioneta={nombre}
         onOpenChange={setCredOpen}
         onConfirm={handleVerifyAndSell}
         isPending={verifying}
@@ -797,9 +803,12 @@ function TabVentaRuta({ vendedor, stock, onCaducado }: { vendedor: Vendedor; sto
 type Tab = "stock" | "cargar" | "venta";
 
 export default function Camioneta() {
-  const [vendedorSeleccionado, setVendedorSeleccionado] = useState<Vendedor>("david");
+  const [vendedorSeleccionado, setVendedorSeleccionado] = useState<Vendedor>("");
   const [tab, setTab] = useState<Tab>("stock");
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: camionetasData = [] } = useListarCamionetas();
+  const camionetas = camionetasData as Camioneta[];
 
   // ── Cambiar camioneta (requiere contraseña dev) ──
   const [devDialogOpen, setDevDialogOpen] = useState(false);
@@ -807,9 +816,82 @@ export default function Camioneta() {
   const [devError, setDevError] = useState("");
   const [selectorOpen, setSelectorOpen] = useState(false);
 
+  // ── Gestión de camionetas (requiere inicio de sesión como administrador) ──
+  const [adminLoginOpen, setAdminLoginOpen] = useState(false);
+  const [adminUser, setAdminUser] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminLoginError, setAdminLoginError] = useState("");
+  const [adminLoginPending, setAdminLoginPending] = useState(false);
+  const [adminAutenticado, setAdminAutenticado] = useState(false);
+  const [gestionOpen, setGestionOpen] = useState(false);
+  const [nombreNuevaCamioneta, setNombreNuevaCamioneta] = useState("");
+  const [camionetaAEliminar, setCamionetaAEliminar] = useState<Camioneta | null>(null);
+
+  useEffect(() => {
+    if (!camionetas.some(c => c.codigo === vendedorSeleccionado)) {
+      setVendedorSeleccionado(camionetas[0]?.codigo ?? "");
+    }
+  }, [camionetas, vendedorSeleccionado]);
+
+  const abrirGestion = () => {
+    if (adminAutenticado) {
+      setGestionOpen(true);
+      return;
+    }
+    setAdminLoginError("");
+    setAdminPassword("");
+    setAdminLoginOpen(true);
+  };
+
+  const iniciarComoAdmin = async () => {
+    if (!adminUser.trim() || !adminPassword) return;
+    setAdminLoginPending(true);
+    setAdminLoginError("");
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: adminUser.trim(), password: adminPassword }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "No se pudo iniciar sesión");
+      if (data.rol !== "admin") throw new Error("Este usuario no tiene permisos de administrador");
+      setAdminAutenticado(true);
+      setAdminLoginOpen(false);
+      setAdminPassword("");
+      setGestionOpen(true);
+    } catch (error) {
+      setAdminLoginError(error instanceof Error ? error.message : "No se pudo iniciar sesión");
+    } finally {
+      setAdminLoginPending(false);
+    }
+  };
+
+  const crearCamionetaMutation = useCrearCamioneta({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListarCamionetasQueryKey() });
+        setNombreNuevaCamioneta("");
+        toast({ title: "Camioneta agregada" });
+      },
+      onError: (error: Error) => toast({ title: error.message, variant: "destructive" }),
+    },
+  });
+
+  const eliminarCamionetaMutation = useEliminarCamioneta({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListarCamionetasQueryKey() });
+        setCamionetaAEliminar(null);
+        toast({ title: "Camioneta eliminada" });
+      },
+      onError: (error: Error) => toast({ title: error.message, variant: "destructive" }),
+    },
+  });
+
   const { data: stock, isLoading } = useCamionetaStock(vendedorSeleccionado);
 
-  const queryClient = useQueryClient();
   const [caducadoDialog, setCaducadoDialog] = useState<StockItem | null>(null);
   const [caducadoCantidad, setCaducadoCantidad] = useState<number | "">(1);
   const [credCaducadoOpen, setCredCaducadoOpen] = useState(false);
@@ -851,23 +933,142 @@ export default function Camioneta() {
     setSelectorOpen(true);
   };
 
-  const nombreVendedor = VENDEDORES.find(v => v.username === vendedorSeleccionado)?.nombre;
+  const nombreVendedor = camionetas.find(c => c.codigo === vendedorSeleccionado)?.nombre;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Truck className="w-8 h-8 text-primary" /> Camioneta de {nombreVendedor}
+          <Truck className="w-8 h-8 text-primary" /> {nombreVendedor ? `Camioneta de ${nombreVendedor}` : "Camionetas"}
         </h1>
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-xs text-muted-foreground gap-1"
-          onClick={() => { setDevPassword(""); setDevError(""); setDevDialogOpen(true); }}
-        >
-          <Plus className="w-3.5 h-3.5" /> Otra camioneta
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="text-xs gap-1" onClick={abrirGestion}>
+            <Truck className="w-3.5 h-3.5" /> Gestionar camionetas
+          </Button>
+          {camionetas.length > 1 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs text-muted-foreground gap-1"
+              onClick={() => { setDevPassword(""); setDevError(""); setDevDialogOpen(true); }}
+            >
+              <Plus className="w-3.5 h-3.5" /> Cambiar camioneta
+            </Button>
+          )}
+        </div>
       </div>
+
+      <Dialog open={adminLoginOpen} onOpenChange={setAdminLoginOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="w-5 h-5 text-primary" /> Acceso de administrador
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">Iniciá sesión con una cuenta de administrador para agregar o borrar camionetas.</p>
+            <Input
+              placeholder="Usuario"
+              value={adminUser}
+              onChange={e => { setAdminUser(e.target.value); setAdminLoginError(""); }}
+              autoFocus
+            />
+            <Input
+              type="password"
+              placeholder="Contraseña"
+              value={adminPassword}
+              onChange={e => { setAdminPassword(e.target.value); setAdminLoginError(""); }}
+              onKeyDown={e => e.key === "Enter" && iniciarComoAdmin()}
+            />
+            {adminLoginError && <p className="text-destructive text-sm bg-destructive/10 p-2 rounded">{adminLoginError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAdminLoginOpen(false)}>Cancelar</Button>
+            <Button onClick={iniciarComoAdmin} disabled={adminLoginPending || !adminUser.trim() || !adminPassword}>
+              {adminLoginPending ? "Verificando..." : "Continuar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={gestionOpen} onOpenChange={setGestionOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="w-5 h-5 text-primary" /> Gestionar camionetas
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 py-2">
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="mb-2 text-sm font-medium">Agregar camioneta</p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Ej: Camioneta Norte"
+                  value={nombreNuevaCamioneta}
+                  onChange={e => setNombreNuevaCamioneta(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && nombreNuevaCamioneta.trim() && crearCamionetaMutation.mutate({ data: { nombre: nombreNuevaCamioneta.trim() } })}
+                />
+                <Button
+                  onClick={() => crearCamionetaMutation.mutate({ data: { nombre: nombreNuevaCamioneta.trim() } })}
+                  disabled={crearCamionetaMutation.isPending || !nombreNuevaCamioneta.trim()}
+                >
+                  <Plus className="mr-1 h-4 w-4" /> Agregar
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Camionetas activas</p>
+              {camionetas.length === 0 ? (
+                <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Todavía no hay camionetas creadas.</p>
+              ) : camionetas.map(camioneta => (
+                <div key={camioneta.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                  <div>
+                    <p className="font-medium">{camioneta.nombre}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {camioneta.stockTotal} {camioneta.stockTotal === 1 ? "unidad cargada" : "unidades cargadas"}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    disabled={camioneta.stockTotal > 0}
+                    onClick={() => setCamionetaAEliminar(camioneta)}
+                    title={camioneta.stockTotal > 0 ? "Devolvé el stock antes de borrar esta camioneta" : "Borrar camioneta"}
+                  >
+                    <Trash2 className="mr-1 h-4 w-4" /> Borrar
+                  </Button>
+                </div>
+              ))}
+              <p className="text-xs text-muted-foreground">Para borrar una camioneta, primero devolvé al depósito todos los productos que tenga cargados.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGestionOpen(false)}>Cerrar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!camionetaAEliminar} onOpenChange={open => { if (!open) setCamionetaAEliminar(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Borrar camioneta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará <strong>{camionetaAEliminar?.nombre}</strong>. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => camionetaAEliminar && eliminarCamionetaMutation.mutate({ codigo: camionetaAEliminar.codigo })}
+            >
+              {eliminarCamionetaMutation.isPending ? "Borrando..." : "Borrar camioneta"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog: contraseña dev para cambiar camioneta */}
       <Dialog open={devDialogOpen} onOpenChange={open => { if (!open) { setDevDialogOpen(false); setDevPassword(""); setDevError(""); } }}>
@@ -910,23 +1111,33 @@ export default function Camioneta() {
             </DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-3 py-4">
-            {VENDEDORES.map(v => (
+            {camionetas.map(camioneta => (
               <button
-                key={v.username}
-                onClick={() => { setVendedorSeleccionado(v.username); setTab("stock"); setSelectorOpen(false); }}
+                key={camioneta.codigo}
+                onClick={() => { setVendedorSeleccionado(camioneta.codigo); setTab("stock"); setSelectorOpen(false); }}
                 className={`py-6 rounded-xl border-2 font-bold text-lg transition-all ${
-                  vendedorSeleccionado === v.username
+                  vendedorSeleccionado === camioneta.codigo
                     ? "border-primary bg-primary/10 text-primary"
                     : "border-border bg-card hover:border-primary hover:bg-primary/5 hover:text-primary"
                 }`}
               >
-                {v.nombre}
+                {camioneta.nombre}
               </button>
             ))}
           </div>
         </DialogContent>
       </Dialog>
 
+      {camionetas.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="py-10 text-center">
+            <Truck className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
+            <p className="font-medium">No hay camionetas disponibles</p>
+            <p className="mt-1 text-sm text-muted-foreground">Un administrador puede crear la primera desde “Gestionar camionetas”.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
       <div className="flex gap-2 border-b border-border">
         {tabs.map(t => (
           <button
@@ -947,13 +1158,16 @@ export default function Camioneta() {
       {tab === "stock" && (
         <TabStock
           vendedor={vendedorSeleccionado}
+          nombreCamioneta={nombreVendedor ?? vendedorSeleccionado}
           stock={stock}
           isLoading={isLoading}
           onCaducado={(item) => { setCaducadoDialog(item); setCaducadoCantidad(1); }}
         />
       )}
-      {tab === "cargar" && <TabCargar vendedor={vendedorSeleccionado} />}
-      {tab === "venta" && <TabVentaRuta vendedor={vendedorSeleccionado} stock={stock} onCaducado={(item) => { setCaducadoDialog(item); setCaducadoCantidad(1); }} />}
+      {tab === "cargar" && <TabCargar vendedor={vendedorSeleccionado} nombreCamioneta={nombreVendedor ?? vendedorSeleccionado} />}
+      {tab === "venta" && <TabVentaRuta vendedor={vendedorSeleccionado} nombreCamioneta={nombreVendedor ?? vendedorSeleccionado} stock={stock} onCaducado={(item) => { setCaducadoDialog(item); setCaducadoCantidad(1); }} />}
+        </>
+      )}
 
       {/* Diálogo caducado */}
       <AlertDialog open={!!caducadoDialog} onOpenChange={open => { if (!open) { setCaducadoDialog(null); setCaducadoCantidad(1); } }}>
@@ -997,6 +1211,7 @@ export default function Camioneta() {
         <CredDialog
           open={credCaducadoOpen}
           vendedor={vendedorSeleccionado}
+          nombreCamioneta={nombreVendedor ?? vendedorSeleccionado}
           onOpenChange={setCredCaducadoOpen}
           onConfirm={handleCaducadoVerify}
           isPending={verifyingCaducado}

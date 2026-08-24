@@ -1,0 +1,1 @@
+- [Dynamic truck stock migration](dynamic-truck-stock-migration.md) — Legacy Michel/David stock is moved once into dynamic truck inventory without resurrecting deleted trucks.

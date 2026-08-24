@@ -19,6 +19,8 @@ tags:
     description: Purchase operations
   - name: combos
     description: Product combo management
+  - name: camionetas
+    description: Delivery vehicle management
   - name: reportes
     description: Reports and analytics
 
@@ -501,6 +503,62 @@ paths:
               schema:
                 $ref: "#/components/schemas/Combo"
 
+  /camioneta/camionetas:
+    get:
+      operationId: listarCamionetas
+      tags: [camionetas]
+      summary: List active delivery vehicles
+      responses:
+        "200":
+          description: List of delivery vehicles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Camioneta"
+    post:
+      operationId: crearCamioneta
+      tags: [camionetas]
+      summary: Create a delivery vehicle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CamionetaInput"
+      responses:
+        "201":
+          description: Created delivery vehicle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Camioneta"
+        "403":
+          description: Administrator access required
+  /camioneta/camionetas/{codigo}:
+    delete:
+      operationId: eliminarCamioneta
+      tags: [camionetas]
+      summary: Delete an empty delivery vehicle
+      parameters:
+        - name: codigo
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted delivery vehicle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MensajeResponse"
+        "403":
+          description: Administrator access required
+        "409":
+          description: Vehicle still has stock
+
   /reportes/resumen:
     get:
       operationId: obtenerResumen
@@ -937,6 +995,31 @@ components:
           type: integer
           minimum: 1
       required: [productoCodigo, cantidad]
+
+    Camioneta:
+      type: object
+      properties:
+        id:
+          type: integer
+        codigo:
+          type: string
+        nombre:
+          type: string
+        activo:
+          type: boolean
+        stockTotal:
+          type: integer
+        creadoEn:
+          type: string
+      required: [id, codigo, nombre, activo, stockTotal, creadoEn]
+
+    CamionetaInput:
+      type: object
+      properties:
+        nombre:
+          type: string
+          minLength: 1
+      required: [nombre]
 
     ItemCompraInput:
       type: object

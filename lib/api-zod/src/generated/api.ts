@@ -523,6 +523,38 @@ export const CrearComboBody = zod.object({
 });
 
 /**
+ * @summary List active delivery vehicles
+ */
+export const ListarCamionetasResponseItem = zod.object({
+  id: zod.number(),
+  codigo: zod.string(),
+  nombre: zod.string(),
+  activo: zod.boolean(),
+  stockTotal: zod.number(),
+  creadoEn: zod.string(),
+});
+export const ListarCamionetasResponse = zod.array(ListarCamionetasResponseItem);
+
+/**
+ * @summary Create a delivery vehicle
+ */
+
+export const CrearCamionetaBody = zod.object({
+  nombre: zod.string().min(1),
+});
+
+/**
+ * @summary Delete an empty delivery vehicle
+ */
+export const EliminarCamionetaParams = zod.object({
+  codigo: zod.coerce.string(),
+});
+
+export const EliminarCamionetaResponse = zod.object({
+  mensaje: zod.string(),
+});
+
+/**
  * @summary Get financial summary (investment, revenue, profit)
  */
 export const ObtenerResumenQueryParams = zod.object({

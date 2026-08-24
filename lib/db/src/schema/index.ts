@@ -6,3 +6,4 @@ export * from "./usuarios";
 export * from "./perdidas";
 export * from "./gastos";
 export * from "./combos";
+export * from "./camionetas";

@@ -1,82 +1,271 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
-import { productosTable, perdidasTable, ventasTable, itemsVentaTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
-import { requireAuth } from "../middleware/auth";
+import { eq, inArray, sql } from "drizzle-orm";
+import {
+  db,
+  camionetasTable,
+  migracionesCamionetasTable,
+  stockCamionetaTable,
+  productosTable,
+  perdidasTable,
+  ventasTable,
+  itemsVentaTable,
+} from "@workspace/db";
+import {
+  CrearCamionetaBody,
+  EliminarCamionetaParams,
+  EliminarCamionetaResponse,
+  ListarCamionetasResponse,
+} from "@workspace/api-zod";
+import { requireAdmin, requireAuth } from "../middleware/auth";
 
 const router = Router();
 router.use(requireAuth);
 
-type Vendedor = "michel" | "david";
+type OperacionItem = { productoCodigo: string; cantidad: number };
+type CargaItem = OperacionItem & { productoNombre: string; proveedor?: string };
 
-function validarVendedor(v: unknown): v is Vendedor {
-  return v === "michel" || v === "david";
+function normalizarCodigo(nombre: string) {
+  return nombre
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 36) || "camioneta";
 }
 
-router.get("/stock", async (req, res) => {
-  const vendedor = (req.query["vendedor"] as string | undefined)?.toLowerCase();
-  if (!validarVendedor(vendedor))
-    return res.status(400).json({ error: "Parámetro vendedor requerido (michel o david)" });
+async function migrarStockLegacySiHaceFalta(): Promise<void> {
+  const [migracion] = await db
+    .select({ id: migracionesCamionetasTable.id })
+    .from(migracionesCamionetasTable)
+    .where(eq(migracionesCamionetasTable.version, "stock-dinamico-v1"));
+  if (migracion) return;
 
-  const productos = await db.select().from(productosTable);
+  await db.transaction(async (tx) => {
+    const [migracionEnCurso] = await tx
+      .select({ id: migracionesCamionetasTable.id })
+      .from(migracionesCamionetasTable)
+      .where(eq(migracionesCamionetasTable.version, "stock-dinamico-v1"));
+    if (migracionEnCurso) return;
 
-  const filtrado = productos
-    .filter(p => vendedor === "michel" ? p.stockCamionetaMichel > 0 : p.stockCamionetaDavid > 0)
-    .sort((a, b) => a.nombre.localeCompare(b.nombre))
-    .map(p => ({
-      codigo: p.codigo,
-      nombre: p.nombre,
-      descripcion: p.descripcion,
-      stockCamioneta: vendedor === "michel" ? p.stockCamionetaMichel : p.stockCamionetaDavid,
-      precioVenta: Number(p.precioVenta),
-      precioCosto: Number(p.precioCosto),
-      unidad: p.unidad,
-    }));
+    await tx.insert(camionetasTable).values([
+      { codigo: "michel", nombre: "Michel" },
+      { codigo: "david", nombre: "David" },
+    ]).onConflictDoNothing();
 
-  return res.json(filtrado);
+    await tx.execute(sql`
+      INSERT INTO stock_camioneta (camioneta_id, producto_codigo, cantidad)
+      SELECT
+        c.id,
+        p.codigo,
+        CASE c.codigo
+          WHEN 'michel' THEN p.stock_camioneta_michel
+          WHEN 'david' THEN p.stock_camioneta_david
+          ELSE 0
+        END
+      FROM camionetas c
+      CROSS JOIN productos p
+      WHERE c.codigo IN ('michel', 'david')
+        AND CASE c.codigo
+          WHEN 'michel' THEN p.stock_camioneta_michel
+          WHEN 'david' THEN p.stock_camioneta_david
+          ELSE 0
+        END > 0
+      ON CONFLICT (camioneta_id, producto_codigo) DO NOTHING
+    `);
+
+    await tx.update(productosTable).set({
+      stockCamionetaMichel: 0,
+      stockCamionetaDavid: 0,
+      actualizadoEn: new Date(),
+    });
+
+    await tx.insert(migracionesCamionetasTable).values({ version: "stock-dinamico-v1" });
+  });
+}
+
+async function obtenerCamioneta(codigo: string) {
+  await migrarStockLegacySiHaceFalta();
+  const [camioneta] = await db
+    .select()
+    .from(camionetasTable)
+    .where(eq(camionetasTable.codigo, codigo.toLowerCase()));
+  return camioneta;
+}
+
+async function cantidadEnCamioneta(camionetaId: number, productoCodigo: string) {
+  const [row] = await db
+    .select({ cantidad: stockCamionetaTable.cantidad })
+    .from(stockCamionetaTable)
+    .where(
+      sql`${stockCamionetaTable.camionetaId} = ${camionetaId}
+        AND ${stockCamionetaTable.productoCodigo} = ${productoCodigo}`,
+    );
+  return row?.cantidad ?? 0;
+}
+
+async function sumarStockCamioneta(camionetaId: number, productoCodigo: string, cantidad: number) {
+  await db
+    .insert(stockCamionetaTable)
+    .values({ camionetaId, productoCodigo, cantidad })
+    .onConflictDoUpdate({
+      target: [stockCamionetaTable.camionetaId, stockCamionetaTable.productoCodigo],
+      set: { cantidad: sql`${stockCamionetaTable.cantidad} + ${cantidad}` },
+    });
+}
+
+async function restarStockCamioneta(camionetaId: number, productoCodigo: string, cantidad: number) {
+  await db
+    .update(stockCamionetaTable)
+    .set({ cantidad: sql`${stockCamionetaTable.cantidad} - ${cantidad}` })
+    .where(
+      sql`${stockCamionetaTable.camionetaId} = ${camionetaId}
+        AND ${stockCamionetaTable.productoCodigo} = ${productoCodigo}`,
+    );
+}
+
+router.get("/camionetas", async (_req, res): Promise<void> => {
+  await migrarStockLegacySiHaceFalta();
+  const rows = await db
+    .select({
+      id: camionetasTable.id,
+      codigo: camionetasTable.codigo,
+      nombre: camionetasTable.nombre,
+      activo: camionetasTable.activo,
+      creadoEn: camionetasTable.creadoEn,
+      stockTotal: sql<number>`coalesce(sum(${stockCamionetaTable.cantidad}), 0)`,
+    })
+    .from(camionetasTable)
+    .leftJoin(stockCamionetaTable, eq(stockCamionetaTable.camionetaId, camionetasTable.id))
+    .where(eq(camionetasTable.activo, true))
+    .groupBy(camionetasTable.id)
+    .orderBy(camionetasTable.nombre);
+
+  res.json(ListarCamionetasResponse.parse(rows.map(row => ({
+    ...row,
+    stockTotal: Number(row.stockTotal),
+    creadoEn: row.creadoEn.toISOString(),
+  }))));
 });
 
-router.post("/cargar", async (req, res) => {
-  const { vendedor, items } = req.body as {
-    vendedor: string;
-    items: { productoCodigo: string; productoNombre: string; cantidad: number; proveedor?: string }[];
-  };
+router.post("/camionetas", requireAdmin, async (req, res): Promise<void> => {
+  const parsed = CrearCamionetaBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
 
-  const v = vendedor?.toLowerCase();
-  if (!validarVendedor(v))
-    return res.status(400).json({ error: "Vendedor inválido (michel o david)" });
-  if (!items || !Array.isArray(items) || items.length === 0)
-    return res.status(400).json({ error: "Se requieren items para cargar" });
+  const nombre = parsed.data.nombre.trim();
+  let codigo = normalizarCodigo(nombre);
+  for (let suffix = 2; ; suffix += 1) {
+    const [existente] = await db.select({ id: camionetasTable.id }).from(camionetasTable).where(eq(camionetasTable.codigo, codigo));
+    if (!existente) break;
+    codigo = `${normalizarCodigo(nombre)}-${suffix}`;
+  }
 
-  const resultados = [];
+  const [camioneta] = await db.insert(camionetasTable).values({ codigo, nombre }).returning();
+  res.status(201).json({
+    ...camioneta,
+    stockTotal: 0,
+    creadoEn: camioneta.creadoEn.toISOString(),
+  });
+});
 
+router.delete("/camionetas/:codigo", requireAdmin, async (req, res): Promise<void> => {
+  const params = EliminarCamionetaParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const camioneta = await obtenerCamioneta(params.data.codigo);
+  if (!camioneta) {
+    res.status(404).json({ error: "Camioneta no encontrada" });
+    return;
+  }
+
+  const [stock] = await db
+    .select({ total: sql<number>`coalesce(sum(${stockCamionetaTable.cantidad}), 0)` })
+    .from(stockCamionetaTable)
+    .where(eq(stockCamionetaTable.camionetaId, camioneta.id));
+
+  if (Number(stock?.total ?? 0) > 0) {
+    res.status(409).json({ error: "No se puede borrar una camioneta que todavía tiene productos cargados" });
+    return;
+  }
+
+  await db.delete(camionetasTable).where(eq(camionetasTable.id, camioneta.id));
+  res.json(EliminarCamionetaResponse.parse({ mensaje: "Camioneta eliminada" }));
+});
+
+router.get("/stock", async (req, res): Promise<void> => {
+  const codigo = typeof req.query["vendedor"] === "string" ? req.query["vendedor"] : "";
+  const camioneta = await obtenerCamioneta(codigo);
+  if (!camioneta) {
+    res.status(404).json({ error: "Camioneta no encontrada" });
+    return;
+  }
+
+  const stock = await db
+    .select({
+      codigo: productosTable.codigo,
+      nombre: productosTable.nombre,
+      descripcion: productosTable.descripcion,
+      stockCamioneta: stockCamionetaTable.cantidad,
+      precioVenta: productosTable.precioVenta,
+      precioCosto: productosTable.precioCosto,
+      unidad: productosTable.unidad,
+    })
+    .from(stockCamionetaTable)
+    .innerJoin(productosTable, eq(stockCamionetaTable.productoCodigo, productosTable.codigo))
+    .where(eq(stockCamionetaTable.camionetaId, camioneta.id))
+    .orderBy(productosTable.nombre);
+
+  res.json(stock
+    .filter(item => item.stockCamioneta > 0)
+    .map(item => ({
+      ...item,
+      precioVenta: Number(item.precioVenta),
+      precioCosto: Number(item.precioCosto),
+    })));
+});
+
+router.post("/cargar", async (req, res): Promise<void> => {
+  const { vendedor, items } = req.body as { vendedor: string; items: CargaItem[] };
+  const camioneta = await obtenerCamioneta(vendedor);
+  if (!camioneta) {
+    res.status(404).json({ error: "Camioneta no encontrada" });
+    return;
+  }
+  if (!Array.isArray(items) || items.length === 0) {
+    res.status(400).json({ error: "Se requieren productos para cargar" });
+    return;
+  }
+
+  const resultados: Array<{ codigo: string; nombre: string }> = [];
   for (const item of items) {
-    if (!item.productoCodigo?.trim() || !item.productoNombre?.trim() || !item.cantidad || item.cantidad <= 0)
-      return res.status(400).json({ error: `Item inválido: ${JSON.stringify(item)}` });
+    if (!item.productoCodigo?.trim() || !item.productoNombre?.trim() || !Number.isInteger(item.cantidad) || item.cantidad <= 0) {
+      res.status(400).json({ error: "Producto o cantidad inválidos" });
+      return;
+    }
 
     const codigo = item.productoCodigo.trim().toUpperCase();
     const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, codigo));
 
-    let updated;
     if (producto) {
-      if (producto.stock < item.cantidad)
-        return res.status(400).json({ error: `Stock insuficiente en depósito para "${producto.nombre}". Disponible: ${producto.stock}` });
-
-      if (v === "michel") {
-        [updated] = await db.update(productosTable).set({
-          stock: sql`${productosTable.stock} - ${item.cantidad}`,
-          stockCamionetaMichel: sql`${productosTable.stockCamionetaMichel} + ${item.cantidad}`,
-          actualizadoEn: new Date(),
-        }).where(eq(productosTable.codigo, codigo)).returning();
-      } else {
-        [updated] = await db.update(productosTable).set({
-          stock: sql`${productosTable.stock} - ${item.cantidad}`,
-          stockCamionetaDavid: sql`${productosTable.stockCamionetaDavid} + ${item.cantidad}`,
-          actualizadoEn: new Date(),
-        }).where(eq(productosTable.codigo, codigo)).returning();
+      if (producto.stock < item.cantidad) {
+        res.status(400).json({ error: `Stock insuficiente en depósito para "${producto.nombre}". Disponible: ${producto.stock}` });
+        return;
       }
+      await db.update(productosTable).set({
+        stock: sql`${productosTable.stock} - ${item.cantidad}`,
+        actualizadoEn: new Date(),
+      }).where(eq(productosTable.codigo, codigo));
+      await sumarStockCamioneta(camioneta.id, codigo, item.cantidad);
+      resultados.push({ codigo, nombre: producto.nombre });
     } else {
-      [updated] = await db.insert(productosTable).values({
+      const [nuevo] = await db.insert(productosTable).values({
         codigo,
         nombre: item.productoNombre.trim(),
         descripcion: "",
@@ -84,150 +273,156 @@ router.post("/cargar", async (req, res) => {
         precioCosto: "0",
         stock: 0,
         stockCamioneta: 0,
-        stockCamionetaMichel: v === "michel" ? item.cantidad : 0,
-        stockCamionetaDavid: v === "david" ? item.cantidad : 0,
         stockMinimo: 0,
         unidad: "unidad",
       }).returning();
+      await sumarStockCamioneta(camioneta.id, nuevo.codigo, item.cantidad);
+      resultados.push({ codigo: nuevo.codigo, nombre: nuevo.nombre });
     }
-
-    resultados.push({ codigo: updated.codigo, nombre: updated.nombre });
   }
 
-  return res.json({ mensaje: "Carga realizada exitosamente", resultados });
+  res.json({ mensaje: "Carga realizada exitosamente", resultados });
 });
 
-router.post("/ventas", async (req, res) => {
-  const { vendedor, items } = req.body as { vendedor: string; items: { productoCodigo: string; cantidad: number }[] };
-  if (!vendedor || !items || items.length === 0)
-    return res.status(400).json({ error: "Vendedor e items requeridos" });
-
-  const v = vendedor.toLowerCase();
-  if (!validarVendedor(v))
-    return res.status(400).json({ error: "Vendedor inválido" });
+router.post("/ventas", async (req, res): Promise<void> => {
+  const { vendedor, items } = req.body as { vendedor: string; items: OperacionItem[] };
+  const camioneta = await obtenerCamioneta(vendedor);
+  if (!camioneta) {
+    res.status(404).json({ error: "Camioneta no encontrada" });
+    return;
+  }
+  if (!Array.isArray(items) || items.length === 0) {
+    res.status(400).json({ error: "Camioneta y productos requeridos" });
+    return;
+  }
 
   let totalVenta = 0;
   let totalGanancia = 0;
-  const itemsDetalle: Array<{ codigo: string; nombre: string; cantidad: number; precioUnitario: number; precioCosto: number; subtotal: number }> = [];
+  const detalle: Array<{ codigo: string; nombre: string; cantidad: number; precioUnitario: number; precioCosto: number; subtotal: number }> = [];
 
   for (const item of items) {
     const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, item.productoCodigo));
-    if (!producto) return res.status(404).json({ error: `Producto no encontrado: ${item.productoCodigo}` });
+    if (!producto) {
+      res.status(404).json({ error: `Producto no encontrado: ${item.productoCodigo}` });
+      return;
+    }
+    const disponible = await cantidadEnCamioneta(camioneta.id, producto.codigo);
+    if (!Number.isInteger(item.cantidad) || item.cantidad <= 0 || disponible < item.cantidad) {
+      res.status(400).json({ error: `Stock insuficiente en camioneta para ${producto.nombre}. Disponible: ${disponible}` });
+      return;
+    }
 
-    const stockDisp = v === "michel" ? producto.stockCamionetaMichel : producto.stockCamionetaDavid;
-    if (stockDisp < item.cantidad)
-      return res.status(400).json({ error: `Stock insuficiente en camioneta de ${vendedor} para ${producto.nombre}. Disponible: ${stockDisp}` });
-
-    const precioVenta = Number(producto.precioVenta);
+    const precioUnitario = Number(producto.precioVenta);
     const precioCosto = Number(producto.precioCosto);
-    const subtotal = precioVenta * item.cantidad;
-    const ganancia = (precioVenta - precioCosto) * item.cantidad;
+    const subtotal = precioUnitario * item.cantidad;
     totalVenta += subtotal;
-    totalGanancia += ganancia;
-    itemsDetalle.push({ codigo: producto.codigo, nombre: producto.nombre, cantidad: item.cantidad, precioUnitario: precioVenta, precioCosto, subtotal });
+    totalGanancia += (precioUnitario - precioCosto) * item.cantidad;
+    detalle.push({ codigo: producto.codigo, nombre: producto.nombre, cantidad: item.cantidad, precioUnitario, precioCosto, subtotal });
   }
 
-  const [venta] = await db.insert(ventasTable).values({
-    vendedor,
-    total: String(totalVenta),
-    ganancia: String(totalGanancia),
-    origen: "camioneta",
-  }).returning();
+  const venta = await db.transaction(async (tx) => {
+    const [creada] = await tx.insert(ventasTable).values({
+      vendedor: camioneta.nombre,
+      total: String(totalVenta),
+      ganancia: String(totalGanancia),
+      origen: "camioneta",
+    }).returning();
 
-  for (const item of itemsDetalle) {
-    await db.insert(itemsVentaTable).values({
-      ventaId: venta.id,
+    await tx.insert(itemsVentaTable).values(detalle.map(item => ({
+      ventaId: creada.id,
       productoCodigo: item.codigo,
       productoNombre: item.nombre,
       cantidad: item.cantidad,
       precioUnitario: String(item.precioUnitario),
       precioCosto: String(item.precioCosto),
       subtotal: String(item.subtotal),
-    });
-    if (v === "michel") {
-      await db.update(productosTable).set({
-        stockCamionetaMichel: sql`${productosTable.stockCamionetaMichel} - ${item.cantidad}`,
-        actualizadoEn: new Date(),
-      }).where(eq(productosTable.codigo, item.codigo));
-    } else {
-      await db.update(productosTable).set({
-        stockCamionetaDavid: sql`${productosTable.stockCamionetaDavid} - ${item.cantidad}`,
-        actualizadoEn: new Date(),
-      }).where(eq(productosTable.codigo, item.codigo));
-    }
-  }
+    })));
 
-  return res.status(201).json({ id: venta.id, total: totalVenta, ganancia: totalGanancia, origen: "camioneta" });
+    for (const item of detalle) {
+      await tx.update(stockCamionetaTable).set({
+        cantidad: sql`${stockCamionetaTable.cantidad} - ${item.cantidad}`,
+      }).where(
+        sql`${stockCamionetaTable.camionetaId} = ${camioneta.id}
+          AND ${stockCamionetaTable.productoCodigo} = ${item.codigo}`,
+      );
+    }
+
+    return creada;
+  });
+
+  res.status(201).json({ id: venta.id, total: totalVenta, ganancia: totalGanancia, origen: "camioneta" });
 });
 
-router.post("/devolver", async (req, res) => {
-  const { vendedor, items } = req.body as {
-    vendedor: string;
-    items: { productoCodigo: string; cantidad: number }[];
-  };
-
-  const v = vendedor?.toLowerCase();
-  if (!validarVendedor(v))
-    return res.status(400).json({ error: "Vendedor inválido (michel o david)" });
-  if (!items || !Array.isArray(items) || items.length === 0)
-    return res.status(400).json({ error: "Se requieren items para devolver" });
-
-  const resultados = [];
+router.post("/devolver", async (req, res): Promise<void> => {
+  const { vendedor, items } = req.body as { vendedor: string; items: OperacionItem[] };
+  const camioneta = await obtenerCamioneta(vendedor);
+  if (!camioneta) {
+    res.status(404).json({ error: "Camioneta no encontrada" });
+    return;
+  }
+  if (!Array.isArray(items) || items.length === 0) {
+    res.status(400).json({ error: "Se requieren productos para devolver" });
+    return;
+  }
 
   for (const item of items) {
-    if (!item.productoCodigo?.trim() || !item.cantidad || item.cantidad <= 0)
-      return res.status(400).json({ error: `Item inválido: ${JSON.stringify(item)}` });
-
-    const codigo = item.productoCodigo.trim().toUpperCase();
-    const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, codigo));
-    if (!producto) return res.status(404).json({ error: `Producto no encontrado: ${codigo}` });
-
-    const stockCamioneta = v === "michel" ? producto.stockCamionetaMichel : producto.stockCamionetaDavid;
-    if (stockCamioneta < item.cantidad)
-      return res.status(400).json({ error: `No hay suficiente stock en camioneta de ${vendedor} para "${producto.nombre}". Disponible: ${stockCamioneta}` });
-
-    let updated;
-    if (v === "michel") {
-      [updated] = await db.update(productosTable).set({
-        stock: sql`${productosTable.stock} + ${item.cantidad}`,
-        stockCamionetaMichel: sql`${productosTable.stockCamionetaMichel} - ${item.cantidad}`,
-        actualizadoEn: new Date(),
-      }).where(eq(productosTable.codigo, codigo)).returning();
-    } else {
-      [updated] = await db.update(productosTable).set({
-        stock: sql`${productosTable.stock} + ${item.cantidad}`,
-        stockCamionetaDavid: sql`${productosTable.stockCamionetaDavid} - ${item.cantidad}`,
-        actualizadoEn: new Date(),
-      }).where(eq(productosTable.codigo, codigo)).returning();
+    const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, item.productoCodigo));
+    if (!producto) {
+      res.status(404).json({ error: `Producto no encontrado: ${item.productoCodigo}` });
+      return;
     }
-
-    resultados.push({ codigo: updated.codigo, nombre: updated.nombre });
+    const disponible = await cantidadEnCamioneta(camioneta.id, producto.codigo);
+    if (!Number.isInteger(item.cantidad) || item.cantidad <= 0 || disponible < item.cantidad) {
+      res.status(400).json({ error: `Stock insuficiente en camioneta para ${producto.nombre}. Disponible: ${disponible}` });
+      return;
+    }
+    await db.update(productosTable).set({
+      stock: sql`${productosTable.stock} + ${item.cantidad}`,
+      actualizadoEn: new Date(),
+    }).where(eq(productosTable.codigo, producto.codigo));
+    await restarStockCamioneta(camioneta.id, producto.codigo, item.cantidad);
   }
 
-  return res.json({ mensaje: "Devolución al depósito realizada exitosamente", resultados });
+  res.json({ mensaje: "Devolución al depósito realizada exitosamente" });
 });
 
-router.post("/caducado", async (req, res) => {
+router.post("/caducado", async (req, res): Promise<void> => {
   const { productoCodigo, cantidad, origen, vendedor } = req.body as {
-    productoCodigo: string; cantidad: number; origen: "panaderia" | "camioneta"; vendedor?: string
+    productoCodigo: string;
+    cantidad: number;
+    origen: "panaderia" | "camioneta";
+    vendedor?: string;
   };
-  if (!productoCodigo || !cantidad || cantidad <= 0)
-    return res.status(400).json({ error: "Datos inválidos" });
-
-  const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, productoCodigo));
-  if (!producto) return res.status(404).json({ error: "Producto no encontrado" });
-
-  const v = vendedor?.toLowerCase();
-  let stockDisponible = producto.stock;
-  if (origen === "camioneta") {
-    stockDisponible = validarVendedor(v) ? (v === "michel" ? producto.stockCamionetaMichel : producto.stockCamionetaDavid) : 0;
+  if (!productoCodigo || !Number.isInteger(cantidad) || cantidad <= 0) {
+    res.status(400).json({ error: "Datos inválidos" });
+    return;
   }
 
-  if (stockDisponible < cantidad)
-    return res.status(400).json({ error: `Stock insuficiente. Disponible: ${stockDisponible}` });
+  const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, productoCodigo));
+  if (!producto) {
+    res.status(404).json({ error: "Producto no encontrado" });
+    return;
+  }
+
+  let camionetaId: number | null = null;
+  if (origen === "camioneta") {
+    const camioneta = await obtenerCamioneta(vendedor ?? "");
+    if (!camioneta) {
+      res.status(404).json({ error: "Camioneta no encontrada" });
+      return;
+    }
+    camionetaId = camioneta.id;
+    const disponible = await cantidadEnCamioneta(camioneta.id, producto.codigo);
+    if (disponible < cantidad) {
+      res.status(400).json({ error: `Stock insuficiente. Disponible: ${disponible}` });
+      return;
+    }
+  } else if (producto.stock < cantidad) {
+    res.status(400).json({ error: `Stock insuficiente. Disponible: ${producto.stock}` });
+    return;
+  }
 
   const costoTotal = Number(producto.precioCosto) * cantidad;
-
   await db.insert(perdidasTable).values({
     productoCodigo: producto.codigo,
     productoNombre: producto.nombre,
@@ -238,17 +433,16 @@ router.post("/caducado", async (req, res) => {
     registradoPor: vendedor || "Sistema",
   });
 
-  if (origen === "camioneta" && validarVendedor(v)) {
-    if (v === "michel") {
-      await db.update(productosTable).set({ stockCamionetaMichel: sql`${productosTable.stockCamionetaMichel} - ${cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, productoCodigo));
-    } else {
-      await db.update(productosTable).set({ stockCamionetaDavid: sql`${productosTable.stockCamionetaDavid} - ${cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, productoCodigo));
-    }
+  if (camionetaId !== null) {
+    await restarStockCamioneta(camionetaId, producto.codigo, cantidad);
   } else {
-    await db.update(productosTable).set({ stock: sql`${productosTable.stock} - ${cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, productoCodigo));
+    await db.update(productosTable).set({
+      stock: sql`${productosTable.stock} - ${cantidad}`,
+      actualizadoEn: new Date(),
+    }).where(eq(productosTable.codigo, producto.codigo));
   }
 
-  return res.json({ mensaje: "Pérdida registrada", costoTotal });
+  res.json({ mensaje: "Pérdida registrada", costoTotal });
 });
 
 export default router;

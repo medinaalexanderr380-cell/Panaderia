@@ -190,6 +190,20 @@ export interface ComboInput {
   items: ComboItemInput[];
 }
 
+export interface Camioneta {
+  id: number;
+  codigo: string;
+  nombre: string;
+  activo: boolean;
+  stockTotal: number;
+  creadoEn: string;
+}
+
+export interface CamionetaInput {
+  /** @minLength 1 */
+  nombre: string;
+}
+
 export interface ResumenFinanciero {
   totalVentas: number;
   totalInvertido: number;

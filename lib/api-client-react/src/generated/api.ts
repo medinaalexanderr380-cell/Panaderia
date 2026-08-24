@@ -18,6 +18,8 @@ import type {
 
 import type {
   ActualizarProductoBody,
+  Camioneta,
+  CamionetaInput,
   Combo,
   ComboInput,
   Compra,
@@ -2167,6 +2169,251 @@ export const useCrearCombo = <
   TContext
 > => {
   return useMutation(getCrearComboMutationOptions(options));
+};
+
+/**
+ * @summary List active delivery vehicles
+ */
+export const getListarCamionetasUrl = () => {
+  return `/api/camioneta/camionetas`;
+};
+
+export const listarCamionetas = async (
+  options?: RequestInit,
+): Promise<Camioneta[]> => {
+  return customFetch<Camioneta[]>(getListarCamionetasUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListarCamionetasQueryKey = () => {
+  return [`/api/camioneta/camionetas`] as const;
+};
+
+export const getListarCamionetasQueryOptions = <
+  TData = Awaited<ReturnType<typeof listarCamionetas>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listarCamionetas>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListarCamionetasQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listarCamionetas>>
+  > = ({ signal }) => listarCamionetas({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listarCamionetas>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListarCamionetasQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listarCamionetas>>
+>;
+export type ListarCamionetasQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List active delivery vehicles
+ */
+
+export function useListarCamionetas<
+  TData = Awaited<ReturnType<typeof listarCamionetas>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listarCamionetas>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListarCamionetasQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a delivery vehicle
+ */
+export const getCrearCamionetaUrl = () => {
+  return `/api/camioneta/camionetas`;
+};
+
+export const crearCamioneta = async (
+  camionetaInput: CamionetaInput,
+  options?: RequestInit,
+): Promise<Camioneta> => {
+  return customFetch<Camioneta>(getCrearCamionetaUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(camionetaInput),
+  });
+};
+
+export const getCrearCamionetaMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof crearCamioneta>>,
+    TError,
+    { data: BodyType<CamionetaInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof crearCamioneta>>,
+  TError,
+  { data: BodyType<CamionetaInput> },
+  TContext
+> => {
+  const mutationKey = ["crearCamioneta"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof crearCamioneta>>,
+    { data: BodyType<CamionetaInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return crearCamioneta(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CrearCamionetaMutationResult = NonNullable<
+  Awaited<ReturnType<typeof crearCamioneta>>
+>;
+export type CrearCamionetaMutationBody = BodyType<CamionetaInput>;
+export type CrearCamionetaMutationError = ErrorType<void>;
+
+/**
+ * @summary Create a delivery vehicle
+ */
+export const useCrearCamioneta = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof crearCamioneta>>,
+    TError,
+    { data: BodyType<CamionetaInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof crearCamioneta>>,
+  TError,
+  { data: BodyType<CamionetaInput> },
+  TContext
+> => {
+  return useMutation(getCrearCamionetaMutationOptions(options));
+};
+
+/**
+ * @summary Delete an empty delivery vehicle
+ */
+export const getEliminarCamionetaUrl = (codigo: string) => {
+  return `/api/camioneta/camionetas/${codigo}`;
+};
+
+export const eliminarCamioneta = async (
+  codigo: string,
+  options?: RequestInit,
+): Promise<MensajeResponse> => {
+  return customFetch<MensajeResponse>(getEliminarCamionetaUrl(codigo), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getEliminarCamionetaMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof eliminarCamioneta>>,
+    TError,
+    { codigo: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof eliminarCamioneta>>,
+  TError,
+  { codigo: string },
+  TContext
+> => {
+  const mutationKey = ["eliminarCamioneta"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof eliminarCamioneta>>,
+    { codigo: string }
+  > = (props) => {
+    const { codigo } = props ?? {};
+
+    return eliminarCamioneta(codigo, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EliminarCamionetaMutationResult = NonNullable<
+  Awaited<ReturnType<typeof eliminarCamioneta>>
+>;
+
+export type EliminarCamionetaMutationError = ErrorType<void>;
+
+/**
+ * @summary Delete an empty delivery vehicle
+ */
+export const useEliminarCamioneta = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof eliminarCamioneta>>,
+    TError,
+    { codigo: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof eliminarCamioneta>>,
+  TError,
+  { codigo: string },
+  TContext
+> => {
+  return useMutation(getEliminarCamionetaMutationOptions(options));
 };
 
 /**
