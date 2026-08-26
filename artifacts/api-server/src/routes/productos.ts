@@ -8,7 +8,7 @@ import {
   proveedoresTable,
   stockCamionetaTable,
 } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 import {
   CrearProductoBody,
   ObtenerProductoParams,
@@ -174,7 +174,10 @@ router.delete("/:codigo", async (req, res): Promise<void> => {
       .select({ nombre: camionetasTable.nombre, cantidad: stockCamionetaTable.cantidad })
       .from(stockCamionetaTable)
       .innerJoin(camionetasTable, eq(stockCamionetaTable.camionetaId, camionetasTable.id))
-      .where(eq(stockCamionetaTable.productoCodigo, producto.codigo)),
+      .where(and(
+        eq(stockCamionetaTable.productoCodigo, producto.codigo),
+        gt(stockCamionetaTable.cantidad, 0),
+      )),
   ]);
 
   const usos: string[] = [];
@@ -192,7 +195,14 @@ router.delete("/:codigo", async (req, res): Promise<void> => {
     return;
   }
 
-  await db.delete(productosTable).where(eq(productosTable.codigo, producto.codigo));
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(stockCamionetaTable)
+      .where(eq(stockCamionetaTable.productoCodigo, producto.codigo));
+    await tx
+      .delete(productosTable)
+      .where(eq(productosTable.codigo, producto.codigo));
+  });
   res.json(EliminarProductoResponse.parse({ mensaje: "Producto eliminado" }));
 });
 

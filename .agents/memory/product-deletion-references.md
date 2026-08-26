@@ -7,4 +7,4 @@ Products with active references in a combo or in delivery-vehicle stock must not
 
 **Why:** Automatically removing a product would silently alter a promotion or erase inventory assignments, which can produce incomplete combos and inaccurate delivery stock.
 
-**How to apply:** Keep product deletion as a guarded operation. Dissolving a combo removes only the promotion and its item links, never the original products or their stock. Then allow its unreferenced products to be deleted normally.
+**How to apply:** Keep product deletion as a guarded operation. Dissolving a combo removes only the promotion and its item links, never the original products or their stock. Treat only positive truck quantities as active stock; clean up zero-quantity stock rows so hidden stale records never block deletion.

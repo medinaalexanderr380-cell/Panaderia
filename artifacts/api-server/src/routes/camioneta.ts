@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, lte, sql } from "drizzle-orm";
 import {
   db,
   camionetasTable,
@@ -123,6 +123,14 @@ async function restarStockCamioneta(camionetaId: number, productoCodigo: string,
       sql`${stockCamionetaTable.camionetaId} = ${camionetaId}
         AND ${stockCamionetaTable.productoCodigo} = ${productoCodigo}`,
     );
+
+  await db
+    .delete(stockCamionetaTable)
+    .where(and(
+      eq(stockCamionetaTable.camionetaId, camionetaId),
+      eq(stockCamionetaTable.productoCodigo, productoCodigo),
+      lte(stockCamionetaTable.cantidad, 0),
+    ));
 }
 
 router.get("/camionetas", async (_req, res): Promise<void> => {
@@ -345,6 +353,11 @@ router.post("/ventas", async (req, res): Promise<void> => {
         sql`${stockCamionetaTable.camionetaId} = ${camioneta.id}
           AND ${stockCamionetaTable.productoCodigo} = ${item.codigo}`,
       );
+      await tx.delete(stockCamionetaTable).where(and(
+        eq(stockCamionetaTable.camionetaId, camioneta.id),
+        eq(stockCamionetaTable.productoCodigo, item.codigo),
+        lte(stockCamionetaTable.cantidad, 0),
+      ));
     }
 
     return creada;
