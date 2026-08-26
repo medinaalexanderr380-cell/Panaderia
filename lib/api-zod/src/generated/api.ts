@@ -301,6 +301,15 @@ export const ListarVentasResponseItem = zod.object({
       precioUnitario: zod.number(),
       precioCosto: zod.number(),
       subtotal: zod.number(),
+      tipo: zod.enum(["producto", "combo"]),
+      comboId: zod.number().nullable(),
+      selecciones: zod.array(
+        zod.object({
+          productoCodigo: zod.string(),
+          productoNombre: zod.string(),
+          cantidad: zod.number(),
+        }),
+      ),
     }),
   ),
 });
@@ -309,6 +318,7 @@ export const ListarVentasResponse = zod.array(ListarVentasResponseItem);
 /**
  * @summary Register a sale
  */
+
 export const RegistrarVentaBody = zod.object({
   vendedor: zod.string(),
   items: zod.array(
@@ -317,6 +327,19 @@ export const RegistrarVentaBody = zod.object({
       cantidad: zod.number(),
     }),
   ),
+  combos: zod
+    .array(
+      zod.object({
+        comboId: zod.number(),
+        selecciones: zod.array(
+          zod.object({
+            productoCodigo: zod.string(),
+            cantidad: zod.number().min(1),
+          }),
+        ),
+      }),
+    )
+    .optional(),
 });
 
 /**
@@ -348,6 +371,15 @@ export const ListarVentasPorDiaResponse = zod.object({
           precioUnitario: zod.number(),
           precioCosto: zod.number(),
           subtotal: zod.number(),
+          tipo: zod.enum(["producto", "combo"]),
+          comboId: zod.number().nullable(),
+          selecciones: zod.array(
+            zod.object({
+              productoCodigo: zod.string(),
+              productoNombre: zod.string(),
+              cantidad: zod.number(),
+            }),
+          ),
         }),
       ),
     }),
@@ -390,6 +422,15 @@ export const ListarDiasConVentasResponseItem = zod.object({
           precioUnitario: zod.number(),
           precioCosto: zod.number(),
           subtotal: zod.number(),
+          tipo: zod.enum(["producto", "combo"]),
+          comboId: zod.number().nullable(),
+          selecciones: zod.array(
+            zod.object({
+              productoCodigo: zod.string(),
+              productoNombre: zod.string(),
+              cantidad: zod.number(),
+            }),
+          ),
         }),
       ),
     }),
@@ -422,6 +463,15 @@ export const ObtenerVentaResponse = zod.object({
       precioUnitario: zod.number(),
       precioCosto: zod.number(),
       subtotal: zod.number(),
+      tipo: zod.enum(["producto", "combo"]),
+      comboId: zod.number().nullable(),
+      selecciones: zod.array(
+        zod.object({
+          productoCodigo: zod.string(),
+          productoNombre: zod.string(),
+          cantidad: zod.number(),
+        }),
+      ),
     }),
   ),
 });
@@ -488,6 +538,8 @@ export const ListarCombosResponseItem = zod.object({
   nombre: zod.string(),
   descripcion: zod.string(),
   precioVenta: zod.number(),
+  tipo: zod.enum(["fijo", "a_eleccion"]),
+  cantidadEleccion: zod.number(),
   activo: zod.boolean(),
   creadoEn: zod.string(),
   actualizadoEn: zod.string(),
@@ -508,10 +560,14 @@ export const ListarCombosResponse = zod.array(ListarCombosResponseItem);
 
 export const crearComboBodyPrecioVentaMin = 0;
 
+export const crearComboBodyTipoDefault = `fijo`;
+
 export const CrearComboBody = zod.object({
   nombre: zod.string().min(1),
   descripcion: zod.string().optional(),
   precioVenta: zod.number().min(crearComboBodyPrecioVentaMin),
+  tipo: zod.enum(["fijo", "a_eleccion"]).default(crearComboBodyTipoDefault),
+  cantidadEleccion: zod.number().min(1).optional(),
   items: zod
     .array(
       zod.object({

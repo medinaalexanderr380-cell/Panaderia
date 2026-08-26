@@ -10,6 +10,8 @@ type ComboRow = {
   nombre: string;
   descripcion: string;
   precioVenta: string | number;
+  tipo: string;
+  cantidadEleccion: number;
   activo: boolean;
   creadoEn: Date;
   actualizadoEn: Date;
@@ -25,6 +27,8 @@ function agruparCombos(rows: ComboRow[]) {
     nombre: string;
     descripcion: string;
     precioVenta: number;
+        tipo: "fijo" | "a_eleccion";
+        cantidadEleccion: number;
     activo: boolean;
     creadoEn: string;
     actualizadoEn: string;
@@ -44,6 +48,8 @@ function agruparCombos(rows: ComboRow[]) {
         nombre: row.nombre,
         descripcion: row.descripcion,
         precioVenta: Number(row.precioVenta),
+        tipo: row.tipo === "a_eleccion" ? "a_eleccion" : "fijo",
+        cantidadEleccion: row.cantidadEleccion,
         activo: row.activo,
         creadoEn: row.creadoEn.toISOString(),
         actualizadoEn: row.actualizadoEn.toISOString(),
@@ -72,6 +78,8 @@ async function consultarCombos(where?: ReturnType<typeof eq>) {
       nombre: combosTable.nombre,
       descripcion: combosTable.descripcion,
       precioVenta: combosTable.precioVenta,
+      tipo: combosTable.tipo,
+      cantidadEleccion: combosTable.cantidadEleccion,
       activo: combosTable.activo,
       creadoEn: combosTable.creadoEn,
       actualizadoEn: combosTable.actualizadoEn,
@@ -116,12 +124,19 @@ router.post("/", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Uno o más productos seleccionados no existen" });
     return;
   }
+  const tipo = parsed.data.tipo === "a_eleccion" ? "a_eleccion" : "fijo";
+  if (tipo === "a_eleccion" && (!parsed.data.cantidadEleccion || parsed.data.cantidadEleccion < 1)) {
+    res.status(400).json({ error: "Indicá cuántas unidades puede elegir el cliente" });
+    return;
+  }
 
   const combo = await db.transaction(async (tx) => {
     const [created] = await tx.insert(combosTable).values({
       nombre: parsed.data.nombre.trim(),
       descripcion: parsed.data.descripcion?.trim() ?? "",
       precioVenta: String(parsed.data.precioVenta),
+      tipo,
+      cantidadEleccion: tipo === "a_eleccion" ? parsed.data.cantidadEleccion! : 0,
     }).returning();
 
     await tx.insert(comboItemsTable).values(

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import {
   db,
   camionetasTable,
@@ -17,6 +17,7 @@ import {
   ListarCamionetasResponse,
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../middleware/auth";
+import { prepararCombos, type ComboSolicitado } from "../lib/combo-ventas";
 
 const router = Router();
 router.use(requireAuth);
@@ -293,77 +294,98 @@ router.post("/cargar", async (req, res): Promise<void> => {
 });
 
 router.post("/ventas", async (req, res): Promise<void> => {
-  const { vendedor, items } = req.body as { vendedor: string; items: OperacionItem[] };
+  const { vendedor, items, combos = [] } = req.body as { vendedor: string; items: OperacionItem[]; combos?: ComboSolicitado[] };
   const camioneta = await obtenerCamioneta(vendedor);
   if (!camioneta) {
     res.status(404).json({ error: "Camioneta no encontrada" });
     return;
   }
-  if (!Array.isArray(items) || items.length === 0) {
+  if (!Array.isArray(items) || (!items.length && !combos.length)) {
     res.status(400).json({ error: "Camioneta y productos requeridos" });
     return;
   }
 
-  let totalVenta = 0;
-  let totalGanancia = 0;
-  const detalle: Array<{ codigo: string; nombre: string; cantidad: number; precioUnitario: number; precioCosto: number; subtotal: number }> = [];
-
-  for (const item of items) {
-    const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, item.productoCodigo));
-    if (!producto) {
-      res.status(404).json({ error: `Producto no encontrado: ${item.productoCodigo}` });
-      return;
+  try {
+    const combosPreparados = await prepararCombos(combos);
+    const requeridos = new Map<string, number>();
+    for (const item of items) {
+      if (!Number.isInteger(item.cantidad) || item.cantidad < 1) throw new Error("La cantidad de un producto no es válida");
+      requeridos.set(item.productoCodigo, (requeridos.get(item.productoCodigo) ?? 0) + item.cantidad);
     }
-    const disponible = await cantidadEnCamioneta(camioneta.id, producto.codigo);
-    if (!Number.isInteger(item.cantidad) || item.cantidad <= 0 || disponible < item.cantidad) {
-      res.status(400).json({ error: `Stock insuficiente en camioneta para ${producto.nombre}. Disponible: ${disponible}` });
-      return;
+    for (const combo of combosPreparados) {
+      for (const seleccion of combo.selecciones) {
+        requeridos.set(seleccion.productoCodigo, (requeridos.get(seleccion.productoCodigo) ?? 0) + seleccion.cantidad);
+      }
     }
+    const productos = await db.select().from(productosTable).where(inArray(productosTable.codigo, Array.from(requeridos.keys())));
+    if (productos.length !== requeridos.size) throw new Error("Uno o más productos ya no existen");
+    const porCodigo = new Map(productos.map(producto => [producto.codigo, producto]));
 
-    const precioUnitario = Number(producto.precioVenta);
-    const precioCosto = Number(producto.precioCosto);
-    const subtotal = precioUnitario * item.cantidad;
-    totalVenta += subtotal;
-    totalGanancia += (precioUnitario - precioCosto) * item.cantidad;
-    detalle.push({ codigo: producto.codigo, nombre: producto.nombre, cantidad: item.cantidad, precioUnitario, precioCosto, subtotal });
+    const lineasProducto = items.map(item => {
+      const producto = porCodigo.get(item.productoCodigo)!;
+      const precioUnitario = Number(producto.precioVenta);
+      const precioCosto = Number(producto.precioCosto);
+      return {
+        productoCodigo: producto.codigo,
+        productoNombre: producto.nombre,
+        cantidad: item.cantidad,
+        precioUnitario: String(precioUnitario),
+        precioCosto: String(precioCosto),
+        subtotal: String(precioUnitario * item.cantidad),
+        tipo: "producto",
+        comboId: null,
+        selecciones: [],
+      };
+    });
+    const lineasCombo = combosPreparados.map(combo => ({
+      productoCodigo: combo.codigoLinea,
+      productoNombre: combo.nombreLinea,
+      cantidad: 1,
+      precioUnitario: String(combo.precioVenta),
+      precioCosto: String(combo.costoTotal),
+      subtotal: String(combo.precioVenta),
+      tipo: "combo",
+      comboId: combo.comboId,
+      selecciones: combo.selecciones,
+    }));
+    const lineas = [...lineasProducto, ...lineasCombo];
+    const totalVenta = lineas.reduce((total, item) => total + Number(item.subtotal), 0);
+    const costoTotal = lineas.reduce((total, item) => total + Number(item.precioCosto) * item.cantidad, 0);
+
+    const venta = await db.transaction(async tx => {
+      for (const [codigo, cantidad] of requeridos) {
+        const producto = porCodigo.get(codigo)!;
+        const actualizados = await tx.update(stockCamionetaTable)
+          .set({ cantidad: sql`${stockCamionetaTable.cantidad} - ${cantidad}` })
+          .where(and(
+            eq(stockCamionetaTable.camionetaId, camioneta.id),
+            eq(stockCamionetaTable.productoCodigo, codigo),
+            gte(stockCamionetaTable.cantidad, cantidad),
+          ))
+          .returning({ productoCodigo: stockCamionetaTable.productoCodigo });
+        if (actualizados.length === 0) throw new Error(`Stock insuficiente en camioneta para ${producto.nombre}`);
+      }
+      const [creada] = await tx.insert(ventasTable).values({
+        vendedor: camioneta.nombre,
+        total: String(totalVenta),
+        ganancia: String(totalVenta - costoTotal),
+        origen: "camioneta",
+      }).returning();
+      await tx.insert(itemsVentaTable).values(lineas.map(item => ({ ventaId: creada.id, ...item })));
+      for (const [codigo] of requeridos) {
+        await tx.delete(stockCamionetaTable).where(and(
+          eq(stockCamionetaTable.camionetaId, camioneta.id),
+          eq(stockCamionetaTable.productoCodigo, codigo),
+          lte(stockCamionetaTable.cantidad, 0),
+        ));
+      }
+      return creada;
+    });
+
+    res.status(201).json({ id: venta.id, total: totalVenta, ganancia: totalVenta - costoTotal, origen: "camioneta" });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "No se pudo registrar la venta" });
   }
-
-  const venta = await db.transaction(async (tx) => {
-    const [creada] = await tx.insert(ventasTable).values({
-      vendedor: camioneta.nombre,
-      total: String(totalVenta),
-      ganancia: String(totalGanancia),
-      origen: "camioneta",
-    }).returning();
-
-    await tx.insert(itemsVentaTable).values(detalle.map(item => ({
-      ventaId: creada.id,
-      productoCodigo: item.codigo,
-      productoNombre: item.nombre,
-      cantidad: item.cantidad,
-      precioUnitario: String(item.precioUnitario),
-      precioCosto: String(item.precioCosto),
-      subtotal: String(item.subtotal),
-    })));
-
-    for (const item of detalle) {
-      await tx.update(stockCamionetaTable).set({
-        cantidad: sql`${stockCamionetaTable.cantidad} - ${item.cantidad}`,
-      }).where(
-        sql`${stockCamionetaTable.camionetaId} = ${camioneta.id}
-          AND ${stockCamionetaTable.productoCodigo} = ${item.codigo}`,
-      );
-      await tx.delete(stockCamionetaTable).where(and(
-        eq(stockCamionetaTable.camionetaId, camioneta.id),
-        eq(stockCamionetaTable.productoCodigo, item.codigo),
-        lte(stockCamionetaTable.cantidad, 0),
-      ));
-    }
-
-    return creada;
-  });
-
-  res.status(201).json({ id: venta.id, total: totalVenta, ganancia: totalGanancia, origen: "camioneta" });
 });
 
 router.post("/devolver", async (req, res): Promise<void> => {

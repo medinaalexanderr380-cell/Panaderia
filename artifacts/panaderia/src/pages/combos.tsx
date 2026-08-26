@@ -26,6 +26,8 @@ const comboSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido"),
   descripcion: z.string().optional().default(""),
   precioVenta: z.coerce.number().min(0, "Debe ser mayor o igual a 0"),
+  tipo: z.enum(["fijo", "a_eleccion"]).default("fijo"),
+  cantidadEleccion: z.coerce.number().min(1, "Indicá una cantidad").optional(),
   items: z.array(z.object({
     productoCodigo: z.string().min(1, "Requerido"),
     cantidad: z.coerce.number().min(1, "Mínimo 1")
@@ -55,6 +57,8 @@ export default function Combos() {
       nombre: "",
       descripcion: "",
       precioVenta: 0,
+      tipo: "fijo",
+      cantidadEleccion: 1,
       items: []
     }
   });
@@ -66,6 +70,7 @@ export default function Combos() {
 
   const watchItems = form.watch("items") || [];
   const precioVenta = form.watch("precioVenta") || 0;
+  const tipoCombo = form.watch("tipo");
 
   const productSuggestions = useMemo(() => {
     const query = productSearch.trim().toLowerCase();
@@ -225,7 +230,36 @@ export default function Combos() {
                       </FormItem>
                     )}
                   />
+                  <FormField
+                    control={form.control}
+                    name="tipo"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Modalidad</FormLabel>
+                        <FormControl>
+                          <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" {...field}>
+                            <option value="fijo">Contenido fijo</option>
+                            <option value="a_eleccion">A elección</option>
+                          </select>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
+                {tipoCombo === "a_eleccion" && (
+                  <FormField
+                    control={form.control}
+                    name="cantidadEleccion"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Unidades que puede elegir el cliente</FormLabel>
+                        <FormControl><Input type="number" min={1} {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 {/* PRODUCT SELECTION */}
                 <div className="bg-sidebar rounded-xl border border-border p-4 space-y-4">

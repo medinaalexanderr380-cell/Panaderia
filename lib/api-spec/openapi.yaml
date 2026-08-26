@@ -891,7 +891,16 @@ components:
           type: number
         subtotal:
           type: number
-      required: [id, ventaId, productoCodigo, productoNombre, cantidad, precioUnitario, precioCosto, subtotal]
+        tipo:
+          type: string
+          enum: [producto, combo]
+        comboId:
+          type: [integer, "null"]
+        selecciones:
+          type: array
+          items:
+            $ref: "#/components/schemas/SeleccionCombo"
+      required: [id, ventaId, productoCodigo, productoNombre, cantidad, precioUnitario, precioCosto, subtotal, tipo, comboId, selecciones]
 
     RegistrarVentaBody:
       type: object
@@ -902,6 +911,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ItemVentaInput"
+        combos:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComboVentaInput"
       required: [vendedor, items]
 
     ItemVentaInput:
@@ -912,6 +925,38 @@ components:
         cantidad:
           type: integer
       required: [productoCodigo, cantidad]
+
+    SeleccionCombo:
+      type: object
+      properties:
+        productoCodigo:
+          type: string
+        productoNombre:
+          type: string
+        cantidad:
+          type: integer
+      required: [productoCodigo, productoNombre, cantidad]
+
+    SeleccionComboInput:
+      type: object
+      properties:
+        productoCodigo:
+          type: string
+        cantidad:
+          type: integer
+          minimum: 1
+      required: [productoCodigo, cantidad]
+
+    ComboVentaInput:
+      type: object
+      properties:
+        comboId:
+          type: integer
+        selecciones:
+          type: array
+          items:
+            $ref: "#/components/schemas/SeleccionComboInput"
+      required: [comboId, selecciones]
 
     Compra:
       type: object
@@ -975,6 +1020,11 @@ components:
           type: string
         precioVenta:
           type: number
+        tipo:
+          type: string
+          enum: [fijo, a_eleccion]
+        cantidadEleccion:
+          type: integer
         activo:
           type: boolean
         creadoEn:
@@ -985,7 +1035,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ComboItem"
-      required: [id, nombre, descripcion, precioVenta, activo, creadoEn, actualizadoEn, items]
+      required: [id, nombre, descripcion, precioVenta, tipo, cantidadEleccion, activo, creadoEn, actualizadoEn, items]
 
     ComboItem:
       type: object
@@ -1011,6 +1061,13 @@ components:
         precioVenta:
           type: number
           minimum: 0
+        tipo:
+          type: string
+          enum: [fijo, a_eleccion]
+          default: fijo
+        cantidadEleccion:
+          type: integer
+          minimum: 1
         items:
           type: array
           minItems: 1

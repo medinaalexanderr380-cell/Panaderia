@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { ventasTable, itemsVentaTable, productosTable } from "@workspace/db";
-import { eq, gte, lte, and, sql, SQL } from "drizzle-orm";
+import { camionetasTable, itemsVentaTable, productosTable, stockCamionetaTable, ventasTable } from "@workspace/db";
+import { eq, gte, inArray, lte, and, sql, SQL } from "drizzle-orm";
 import { RegistrarVentaBody, ListarVentasQueryParams, ObtenerVentaParams, EliminarVentaParams } from "@workspace/api-zod";
+import { prepararCombos } from "../lib/combo-ventas";
 
 const router = Router();
 
@@ -15,11 +16,55 @@ async function ventaConItems(venta: typeof ventasTable.$inferSelect) {
     fecha: venta.fecha.toISOString(),
     items: items.map(i => ({
       ...i,
+      comboId: i.comboId ?? null,
+      selecciones: i.selecciones ?? [],
       precioUnitario: Number(i.precioUnitario),
       precioCosto: Number(i.precioCosto),
       subtotal: Number(i.subtotal),
     })),
   };
+}
+
+function consumosDeItems(items: Array<typeof itemsVentaTable.$inferSelect>) {
+  const consumos = new Map<string, number>();
+  for (const item of items) {
+    const selecciones = item.tipo === "combo" && Array.isArray(item.selecciones)
+      ? item.selecciones
+      : [{ productoCodigo: item.productoCodigo, cantidad: item.cantidad }];
+    for (const seleccion of selecciones) {
+      if (typeof seleccion?.productoCodigo !== "string" || !Number.isInteger(seleccion?.cantidad) || seleccion.cantidad < 1) continue;
+      consumos.set(seleccion.productoCodigo, (consumos.get(seleccion.productoCodigo) ?? 0) + seleccion.cantidad);
+    }
+  }
+  return consumos;
+}
+
+async function restaurarStockVenta(tx: any, venta: typeof ventasTable.$inferSelect, items: Array<typeof itemsVentaTable.$inferSelect>) {
+  const consumos = consumosDeItems(items);
+  if (venta.origen !== "camioneta") {
+    for (const [codigo, cantidad] of consumos) {
+      await tx.update(productosTable).set({
+        stock: sql`${productosTable.stock} + ${cantidad}`,
+        actualizadoEn: new Date(),
+      }).where(eq(productosTable.codigo, codigo));
+    }
+    return;
+  }
+
+  const [camioneta] = await tx
+    .select({ id: camionetasTable.id })
+    .from(camionetasTable)
+    .where(sql`lower(${camionetasTable.nombre}) = lower(${venta.vendedor})`);
+  if (!camioneta) return;
+
+  for (const [codigo, cantidad] of consumos) {
+    await tx.insert(stockCamionetaTable)
+      .values({ camionetaId: camioneta.id, productoCodigo: codigo, cantidad })
+      .onConflictDoUpdate({
+        target: [stockCamionetaTable.camionetaId, stockCamionetaTable.productoCodigo],
+        set: { cantidad: sql`${stockCamionetaTable.cantidad} + ${cantidad}` },
+      });
+  }
 }
 
 // List all sales (with optional filters)
@@ -105,26 +150,14 @@ router.delete("/dia/:fecha", async (req, res) => {
     .from(ventasTable)
     .where(sql`DATE(${ventasTable.fecha}) = ${fecha}`);
 
-  for (const venta of ventasDia) {
-    const items = await db.select().from(itemsVentaTable).where(eq(itemsVentaTable.ventaId, venta.id));
-    for (const item of items) {
-      const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, item.productoCodigo));
-      if (producto) {
-        if (venta.origen === "camioneta") {
-          const v = venta.vendedor.toLowerCase();
-          if (v === "michel") {
-            await db.update(productosTable).set({ stockCamionetaMichel: sql`${productosTable.stockCamionetaMichel} + ${item.cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, item.productoCodigo));
-          } else if (v === "david") {
-            await db.update(productosTable).set({ stockCamionetaDavid: sql`${productosTable.stockCamionetaDavid} + ${item.cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, item.productoCodigo));
-          }
-        } else {
-          await db.update(productosTable).set({ stock: producto.stock + item.cantidad, actualizadoEn: new Date() }).where(eq(productosTable.codigo, item.productoCodigo));
-        }
-      }
+  await db.transaction(async tx => {
+    for (const venta of ventasDia) {
+      const items = await tx.select().from(itemsVentaTable).where(eq(itemsVentaTable.ventaId, venta.id));
+      await restaurarStockVenta(tx, venta, items);
+      await tx.delete(itemsVentaTable).where(eq(itemsVentaTable.ventaId, venta.id));
+      await tx.delete(ventasTable).where(eq(ventasTable.id, venta.id));
     }
-    await db.delete(itemsVentaTable).where(eq(itemsVentaTable.ventaId, venta.id));
-    await db.delete(ventasTable).where(eq(ventasTable.id, venta.id));
-  }
+  });
 
   return res.json({ mensaje: `${ventasDia.length} venta(s) del día ${fecha} eliminada(s)` });
 });
@@ -175,58 +208,82 @@ router.post("/", async (req, res) => {
   const parsed = RegistrarVentaBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
 
-  const { vendedor, items } = parsed.data;
-  let total = 0;
-  let ganancia = 0;
+  const { vendedor, items, combos = [] } = parsed.data;
+  if (items.length === 0 && combos.length === 0) {
+    res.status(400).json({ error: "Agregá al menos un producto o combo" });
+    return;
+  }
 
-  const itemsData: Array<{
-    productoCodigo: string;
-    productoNombre: string;
-    cantidad: number;
-    precioUnitario: string;
-    precioCosto: string;
-    subtotal: string;
-  }> = [];
-
-  for (const item of items) {
-    const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, item.productoCodigo));
-    if (!producto) return res.status(404).json({ error: `Producto ${item.productoCodigo} no encontrado` });
-    if (producto.stock < item.cantidad) {
-      return res.status(400).json({ error: `Stock insuficiente para ${producto.nombre}. Stock disponible: ${producto.stock}` });
+  try {
+    const combosPreparados = await prepararCombos(combos);
+    const requeridos = new Map<string, number>();
+    for (const item of items) {
+      if (!Number.isInteger(item.cantidad) || item.cantidad < 1) throw new Error("La cantidad de un producto no es válida");
+      requeridos.set(item.productoCodigo, (requeridos.get(item.productoCodigo) ?? 0) + item.cantidad);
+    }
+    for (const combo of combosPreparados) {
+      for (const seleccion of combo.selecciones) {
+        requeridos.set(seleccion.productoCodigo, (requeridos.get(seleccion.productoCodigo) ?? 0) + seleccion.cantidad);
+      }
     }
 
-    const precioVenta = Number(producto.precioVenta);
-    const precioCosto = Number(producto.precioCosto);
-    const subtotal = precioVenta * item.cantidad;
-    const costoTotal = precioCosto * item.cantidad;
-    total += subtotal;
-    ganancia += subtotal - costoTotal;
+    const productos = await db.select().from(productosTable).where(inArray(productosTable.codigo, Array.from(requeridos.keys())));
+    if (productos.length !== requeridos.size) throw new Error("Uno o más productos ya no existen");
+    const porCodigo = new Map(productos.map(producto => [producto.codigo, producto]));
 
-    itemsData.push({
-      productoCodigo: item.productoCodigo,
-      productoNombre: producto.nombre,
-      cantidad: item.cantidad,
-      precioUnitario: String(precioVenta),
-      precioCosto: String(precioCosto),
-      subtotal: String(subtotal),
+    const lineas = items.map(item => {
+      const producto = porCodigo.get(item.productoCodigo)!;
+      const precioUnitario = Number(producto.precioVenta);
+      const precioCosto = Number(producto.precioCosto);
+      return {
+        productoCodigo: producto.codigo,
+        productoNombre: producto.nombre,
+        cantidad: item.cantidad,
+        precioUnitario: String(precioUnitario),
+        precioCosto: String(precioCosto),
+        subtotal: String(precioUnitario * item.cantidad),
+        tipo: "producto",
+        comboId: null,
+        selecciones: [],
+      };
+    });
+    const lineasCombo = combosPreparados.map(combo => ({
+      productoCodigo: combo.codigoLinea,
+      productoNombre: combo.nombreLinea,
+      cantidad: 1,
+      precioUnitario: String(combo.precioVenta),
+      precioCosto: String(combo.costoTotal),
+      subtotal: String(combo.precioVenta),
+      tipo: "combo",
+      comboId: combo.comboId,
+      selecciones: combo.selecciones,
+    }));
+    const todasLasLineas = [...lineas, ...lineasCombo];
+    const total = todasLasLineas.reduce((suma, linea) => suma + Number(linea.subtotal), 0);
+    const costoTotal = todasLasLineas.reduce((suma, linea) => suma + Number(linea.precioCosto) * linea.cantidad, 0);
+
+    const venta = await db.transaction(async tx => {
+      for (const [codigo, cantidad] of requeridos) {
+        const producto = porCodigo.get(codigo)!;
+        const actualizados = await tx.update(productosTable)
+          .set({ stock: sql`${productosTable.stock} - ${cantidad}`, actualizadoEn: new Date() })
+          .where(and(eq(productosTable.codigo, codigo), gte(productosTable.stock, cantidad)))
+          .returning({ codigo: productosTable.codigo });
+        if (actualizados.length === 0) throw new Error(`Stock insuficiente para ${producto.nombre}. Stock disponible: ${producto.stock}`);
+      }
+      const [creada] = await tx.insert(ventasTable).values({
+        vendedor,
+        total: String(total),
+        ganancia: String(total - costoTotal),
+      }).returning();
+      await tx.insert(itemsVentaTable).values(todasLasLineas.map(linea => ({ ventaId: creada.id, ...linea })));
+      return creada;
     });
 
-    await db.update(productosTable)
-      .set({ stock: producto.stock - item.cantidad, actualizadoEn: new Date() })
-      .where(eq(productosTable.codigo, item.productoCodigo));
+    return res.status(201).json(await ventaConItems(venta));
+  } catch (error) {
+    return res.status(400).json({ error: error instanceof Error ? error.message : "No se pudo registrar la venta" });
   }
-
-  const [venta] = await db.insert(ventasTable).values({
-    vendedor,
-    total: String(total),
-    ganancia: String(ganancia),
-  }).returning();
-
-  for (const item of itemsData) {
-    await db.insert(itemsVentaTable).values({ ventaId: venta.id, ...item });
-  }
-
-  return res.status(201).json(await ventaConItems(venta));
 });
 
 // Get single sale
@@ -247,25 +304,12 @@ router.delete("/:id", async (req, res) => {
   const [venta] = await db.select().from(ventasTable).where(eq(ventasTable.id, id));
   if (!venta) return res.status(404).json({ error: "Venta no encontrada" });
 
-  const items = await db.select().from(itemsVentaTable).where(eq(itemsVentaTable.ventaId, id));
-  for (const item of items) {
-    const [producto] = await db.select().from(productosTable).where(eq(productosTable.codigo, item.productoCodigo));
-    if (producto) {
-      if (venta.origen === "camioneta") {
-        const v = venta.vendedor.toLowerCase();
-        if (v === "michel") {
-          await db.update(productosTable).set({ stockCamionetaMichel: sql`${productosTable.stockCamionetaMichel} + ${item.cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, item.productoCodigo));
-        } else if (v === "david") {
-          await db.update(productosTable).set({ stockCamionetaDavid: sql`${productosTable.stockCamionetaDavid} + ${item.cantidad}`, actualizadoEn: new Date() }).where(eq(productosTable.codigo, item.productoCodigo));
-        }
-      } else {
-        await db.update(productosTable).set({ stock: producto.stock + item.cantidad, actualizadoEn: new Date() }).where(eq(productosTable.codigo, item.productoCodigo));
-      }
-    }
-  }
-
-  await db.delete(itemsVentaTable).where(eq(itemsVentaTable.ventaId, id));
-  await db.delete(ventasTable).where(eq(ventasTable.id, id));
+  await db.transaction(async tx => {
+    const items = await tx.select().from(itemsVentaTable).where(eq(itemsVentaTable.ventaId, id));
+    await restaurarStockVenta(tx, venta, items);
+    await tx.delete(itemsVentaTable).where(eq(itemsVentaTable.ventaId, id));
+    await tx.delete(ventasTable).where(eq(ventasTable.id, id));
+  });
 
   return res.json({ mensaje: "Venta eliminada" });
 });

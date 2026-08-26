@@ -2,6 +2,7 @@ import { useState, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListarProductos,
+  useListarCombos,
   useRegistrarVenta,
   useListarDiasConVentas,
   getListarDiasConVentasQueryKey,
@@ -36,6 +37,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { TicketImpresion, type TicketData, type TicketItem } from "@/components/ticket-impresion";
+import { SelectorCombo, type SeleccionCombo } from "@/components/selector-combo";
 
 /* ─── helpers ─────────────────────────────────────────────────────────────── */
 const fmt = (n: number) =>
@@ -43,6 +45,8 @@ const fmt = (n: number) =>
 
 /* ─── CartItem ─────────────────────────────────────────────────────────────── */
 interface CartItem {
+  id: string;
+  tipo: "producto" | "combo";
   productoCodigo: string;
   productoNombre: string;
   productoDescripcion: string;
@@ -50,6 +54,8 @@ interface CartItem {
   cantidad: number;
   stockDisponible: number;
   subtotal: number;
+  comboId?: number;
+  selecciones?: SeleccionCombo[];
 }
 
 /* ─── POS Section ──────────────────────────────────────────────────────────── */
@@ -67,6 +73,7 @@ function POS() {
   const savedVendedorRef = useRef("");
 
   const { data: productos } = useListarProductos();
+  const { data: combos } = useListarCombos();
 
   const registrarVenta = useRegistrarVenta({
     mutation: {
@@ -117,6 +124,8 @@ function POS() {
     }
 
     const preview: CartItem = {
+      id: producto.codigo,
+      tipo: "producto",
       productoCodigo: producto.codigo,
       productoNombre: producto.nombre,
       productoDescripcion: producto.descripcion,
@@ -133,19 +142,23 @@ function POS() {
       return;
     }
 
-    const existing = cart.find((i) => i.productoCodigo === producto.codigo);
+    const existing = cart.find((i) => i.tipo === "producto" && i.productoCodigo === producto.codigo);
+    const reservadoPorCombos = cart.filter(i => i.tipo === "combo").flatMap(i => i.selecciones ?? [])
+      .filter(i => i.productoCodigo === producto.codigo).reduce((suma, i) => suma + i.cantidad, 0);
     if (existing) {
-      if (existing.cantidad >= producto.stock) {
+      if (existing.cantidad + reservadoPorCombos >= producto.stock) {
         toast({ title: "Stock insuficiente", description: `Solo hay ${producto.stock} disponibles.`, variant: "destructive" });
       } else {
         setCart(cart.map((i) =>
-          i.productoCodigo === producto.codigo
+            i.tipo === "producto" && i.productoCodigo === producto.codigo
             ? { ...i, cantidad: i.cantidad + 1, subtotal: (i.cantidad + 1) * i.precioUnitario }
             : i
         ));
       }
-    } else {
+    } else if (reservadoPorCombos < producto.stock) {
       setCart([...cart, preview]);
+    } else {
+      toast({ title: "Stock insuficiente", description: `El stock de ${producto.nombre} ya está reservado en combos.`, variant: "destructive" });
     }
 
     setCodigoInput("");
@@ -153,16 +166,44 @@ function POS() {
   };
 
   const updateQty = (codigo: string, delta: number) => {
+    const reservadoPorCombos = cart.filter(i => i.tipo === "combo").flatMap(i => i.selecciones ?? [])
+      .filter(i => i.productoCodigo === codigo).reduce((suma, i) => suma + i.cantidad, 0);
     setCart(cart.map((i) => {
-      if (i.productoCodigo !== codigo) return i;
-      const qty = Math.max(1, Math.min(i.cantidad + delta, i.stockDisponible));
+      if (i.tipo !== "producto" || i.productoCodigo !== codigo) return i;
+      const qty = Math.max(1, Math.min(i.cantidad + delta, i.stockDisponible - reservadoPorCombos));
       return { ...i, cantidad: qty, subtotal: qty * i.precioUnitario };
     }));
   };
 
-  const removeItem = (codigo: string) => {
-    setCart(cart.filter((i) => i.productoCodigo !== codigo));
-    if (previewProduct?.productoCodigo === codigo) setPreviewProduct(null);
+  const removeItem = (id: string) => {
+    setCart(cart.filter((i) => i.id !== id));
+    if (previewProduct?.id === id) setPreviewProduct(null);
+  };
+
+  const stockParaCombos = useMemo(() => {
+    const reservado: Record<string, number> = {};
+    for (const item of cart) {
+      const consumos = item.tipo === "combo" ? (item.selecciones ?? []) : [{ productoCodigo: item.productoCodigo, cantidad: item.cantidad }];
+      for (const consumo of consumos) reservado[consumo.productoCodigo] = (reservado[consumo.productoCodigo] ?? 0) + consumo.cantidad;
+    }
+    return Object.fromEntries((productos ?? []).map(producto => [producto.codigo, producto.stock - (reservado[producto.codigo] ?? 0)]));
+  }, [cart, productos]);
+
+  const agregarCombo = (combo: { comboId: number; nombre: string; precioVenta: number; selecciones: SeleccionCombo[] }) => {
+    const resumen = combo.selecciones.map(item => `${item.cantidad}× ${item.productoNombre}`).join(", ");
+    setCart(actual => [...actual, {
+      id: `combo-${combo.comboId}-${Date.now()}`,
+      tipo: "combo",
+      productoCodigo: `COMBO-${combo.comboId}`,
+      productoNombre: `${combo.nombre} — ${resumen}`,
+      productoDescripcion: "Combo",
+      precioUnitario: combo.precioVenta,
+      cantidad: 1,
+      stockDisponible: 1,
+      subtotal: combo.precioVenta,
+      comboId: combo.comboId,
+      selecciones: combo.selecciones,
+    }]);
   };
 
   const handleConfirm = () => {
@@ -179,7 +220,8 @@ function POS() {
     registrarVenta.mutate({
       data: {
         vendedor,
-        items: cart.map((i) => ({ productoCodigo: i.productoCodigo, cantidad: i.cantidad })),
+        items: cart.filter(i => i.tipo === "producto").map((i) => ({ productoCodigo: i.productoCodigo, cantidad: i.cantidad })),
+        combos: cart.filter(i => i.tipo === "combo").map(i => ({ comboId: i.comboId!, selecciones: (i.selecciones ?? []).map(s => ({ productoCodigo: s.productoCodigo, cantidad: s.cantidad })) })),
       },
     });
   };
@@ -232,6 +274,9 @@ function POS() {
                   <Button type="submit" variant="secondary">Agregar</Button>
                 </form>
               </div>
+              <div className="self-end">
+                <SelectorCombo combos={combos ?? []} stockDisponible={stockParaCombos} onAgregar={agregarCombo} />
+              </div>
             </div>
 
             {/* Product preview card */}
@@ -275,15 +320,15 @@ function POS() {
                     </TableRow>
                   ) : (
                     cart.map((item) => (
-                      <TableRow key={item.productoCodigo} className="group">
+                      <TableRow key={item.id} className="group">
                         <TableCell className="font-mono text-xs">{item.productoCodigo}</TableCell>
                         <TableCell className="font-medium">{item.productoNombre}</TableCell>
                         <TableCell className="text-right">{fmt(item.precioUnitario)}</TableCell>
                         <TableCell>
                           <div className="flex items-center justify-center gap-2">
-                            <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQty(item.productoCodigo, -1)}>−</Button>
+                            <Button variant="outline" size="icon" className="h-6 w-6" disabled={item.tipo === "combo"} onClick={() => updateQty(item.productoCodigo, -1)}>−</Button>
                             <span className="w-8 text-center font-bold">{item.cantidad}</span>
-                            <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQty(item.productoCodigo, 1)}>+</Button>
+                            <Button variant="outline" size="icon" className="h-6 w-6" disabled={item.tipo === "combo"} onClick={() => updateQty(item.productoCodigo, 1)}>+</Button>
                           </div>
                         </TableCell>
                         <TableCell className="text-right font-bold">{fmt(item.subtotal)}</TableCell>
@@ -291,7 +336,7 @@ function POS() {
                           <Button
                             variant="ghost" size="icon"
                             className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            onClick={() => removeItem(item.productoCodigo)}
+                            onClick={() => removeItem(item.id)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

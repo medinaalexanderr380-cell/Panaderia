@@ -8,6 +8,8 @@ export const combosTable = pgTable("combos", {
   nombre: text("nombre").notNull(),
   descripcion: text("descripcion").notNull().default(""),
   precioVenta: numeric("precio_venta", { precision: 10, scale: 2 }).notNull(),
+  tipo: text("tipo").notNull().default("fijo"),
+  cantidadEleccion: integer("cantidad_eleccion").notNull().default(0),
   activo: boolean("activo").notNull().default(true),
   creadoEn: timestamp("creado_en").notNull().defaultNow(),
   actualizadoEn: timestamp("actualizado_en").notNull().defaultNow(),

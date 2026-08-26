@@ -15,11 +15,13 @@ import {
 import { Truck, Plus, Trash2, ShoppingCart, AlertTriangle, ArrowDownToLine, Lock, CheckCircle, Undo2, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { TicketImpresion, type TicketData } from "@/components/ticket-impresion";
+import { SelectorCombo, type SeleccionCombo } from "@/components/selector-combo";
 import {
   getListarCamionetasQueryKey,
   useCrearCamioneta,
   useEliminarCamioneta,
   useListarCamionetas,
+  useListarCombos,
 } from "@workspace/api-client-react";
 
 const fmt = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
@@ -27,7 +29,7 @@ const fmt = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", c
 type Vendedor = string;
 
 interface StockItem { codigo: string; nombre: string; stockCamioneta: number; precioVenta: number; precioCosto: number; unidad: string; descripcion: string }
-interface CartItem { productoCodigo: string; productoNombre: string; cantidad: number; precioUnitario: number }
+interface CartItem { id: string; tipo: "producto" | "combo"; productoCodigo: string; productoNombre: string; cantidad: number; precioUnitario: number; comboId?: number; selecciones?: SeleccionCombo[] }
 interface CargaItem { productoCodigo: string; productoNombre: string; cantidad: number; proveedor: string }
 interface Camioneta { id: number; codigo: string; nombre: string; activo: boolean; stockTotal: number; creadoEn: string }
 
@@ -62,11 +64,11 @@ function useCargaMutation(vendedor: Vendedor, onSuccess: () => void) {
 function useVentaRutaMutation(vendedor: Vendedor, onSuccess: () => void) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (items: { productoCodigo: string; cantidad: number }[]) =>
+    mutationFn: (data: { items: { productoCodigo: string; cantidad: number }[]; combos: { comboId: number; selecciones: { productoCodigo: string; cantidad: number }[] }[] }) =>
       fetch("/api/camioneta/ventas", {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vendedor, items }),
+        body: JSON.stringify({ vendedor, ...data }),
       }).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error); return d; }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["camioneta", "stock", vendedor] });
@@ -664,6 +666,7 @@ function TabVentaRuta({ vendedor, nombreCamioneta, stock, onCaducado }: { vended
   const [verifying, setVerifying] = useState(false);
   const [ticketData, setTicketData] = useState<TicketData | null>(null);
   const savedCartRef = useRef<CartItem[]>([]);
+  const { data: combos } = useListarCombos();
 
   const nombre = nombreCamioneta;
 
@@ -691,18 +694,30 @@ function TabVentaRuta({ vendedor, nombreCamioneta, stock, onCaducado }: { vended
 
   const addToCart = (item: StockItem) => {
     setCart(prev => {
-      const ex = prev.find(i => i.productoCodigo === item.codigo);
+      const ex = prev.find(i => i.tipo === "producto" && i.productoCodigo === item.codigo);
       const inCart = ex?.cantidad ?? 0;
-      if (inCart >= item.stockCamioneta) {
+      const reservadoPorCombos = prev.filter(i => i.tipo === "combo").flatMap(i => i.selecciones ?? [])
+        .filter(i => i.productoCodigo === item.codigo).reduce((suma, i) => suma + i.cantidad, 0);
+      if (inCart + reservadoPorCombos >= item.stockCamioneta) {
         toast({ title: `Sin stock en camioneta para ${item.nombre}`, variant: "destructive" });
         return prev;
       }
-      if (ex) return prev.map(i => i.productoCodigo === item.codigo ? { ...i, cantidad: i.cantidad + 1 } : i);
-      return [...prev, { productoCodigo: item.codigo, productoNombre: item.nombre, cantidad: 1, precioUnitario: item.precioVenta }];
+      if (ex) return prev.map(i => i.tipo === "producto" && i.productoCodigo === item.codigo ? { ...i, cantidad: i.cantidad + 1 } : i);
+      return [...prev, { id: item.codigo, tipo: "producto", productoCodigo: item.codigo, productoNombre: item.nombre, cantidad: 1, precioUnitario: item.precioVenta }];
     });
   };
 
   const total = cart.reduce((s, i) => s + i.cantidad * i.precioUnitario, 0);
+  const stockParaCombos = Object.fromEntries((stock ?? []).map(item => {
+    const reservado = cart.reduce((total, carrito) => total + (carrito.tipo === "combo"
+      ? (carrito.selecciones ?? []).filter(seleccion => seleccion.productoCodigo === item.codigo).reduce((s, seleccion) => s + seleccion.cantidad, 0)
+      : carrito.productoCodigo === item.codigo ? carrito.cantidad : 0), 0);
+    return [item.codigo, item.stockCamioneta - reservado];
+  }));
+  const agregarCombo = (combo: { comboId: number; nombre: string; precioVenta: number; selecciones: SeleccionCombo[] }) => {
+    const resumen = combo.selecciones.map(item => `${item.cantidad}× ${item.productoNombre}`).join(", ");
+    setCart(actual => [...actual, { id: `combo-${combo.comboId}-${Date.now()}`, tipo: "combo", productoCodigo: `COMBO-${combo.comboId}`, productoNombre: `${combo.nombre} — ${resumen}`, cantidad: 1, precioUnitario: combo.precioVenta, comboId: combo.comboId, selecciones: combo.selecciones }]);
+  };
 
   const handleVerifyAndSell = async (password: string) => {
     setVerifying(true);
@@ -712,7 +727,10 @@ function TabVentaRuta({ vendedor, nombreCamioneta, stock, onCaducado }: { vended
     if (!result.ok) { setCredError(result.error!); return; }
     setCredOpen(false);
     savedCartRef.current = cart;
-    ventaMutation.mutate(cart.map(i => ({ productoCodigo: i.productoCodigo, cantidad: i.cantidad })));
+    ventaMutation.mutate({
+      items: cart.filter(i => i.tipo === "producto").map(i => ({ productoCodigo: i.productoCodigo, cantidad: i.cantidad })),
+      combos: cart.filter(i => i.tipo === "combo").map(i => ({ comboId: i.comboId!, selecciones: (i.selecciones ?? []).map(s => ({ productoCodigo: s.productoCodigo, cantidad: s.cantidad })) })),
+    });
   };
 
   return (
@@ -739,6 +757,7 @@ function TabVentaRuta({ vendedor, nombreCamioneta, stock, onCaducado }: { vended
                 stock={stock}
                 placeholder="Buscar y agregar producto..."
               />
+              <SelectorCombo combos={combos ?? []} stockDisponible={stockParaCombos} onAgregar={agregarCombo} />
               {stockFiltrado.length === 0 && search.trim() ? (
                 <p className="text-center py-4 text-muted-foreground text-sm">No se encontraron productos</p>
               ) : null}
@@ -756,16 +775,16 @@ function TabVentaRuta({ vendedor, nombreCamioneta, stock, onCaducado }: { vended
             {cart.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-3">Seleccioná productos de la lista</p>
             ) : cart.map(item => (
-              <div key={item.productoCodigo} className="flex items-center gap-2">
+              <div key={item.id} className="flex items-center gap-2">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium truncate">{item.productoNombre}</p>
                 </div>
                 <div className="flex items-center gap-1">
                   <Button variant="outline" size="icon" className="h-6 w-6"
-                    onClick={() => setCart(c => c.map(i => i.productoCodigo === item.productoCodigo ? { ...i, cantidad: Math.max(0, i.cantidad - 1) } : i).filter(i => i.cantidad > 0))}>−</Button>
+                    disabled={item.tipo === "combo"} onClick={() => setCart(c => c.map(i => i.tipo === "producto" && i.productoCodigo === item.productoCodigo ? { ...i, cantidad: Math.max(0, i.cantidad - 1) } : i).filter(i => i.cantidad > 0))}>−</Button>
                   <span className="w-6 text-center text-sm font-bold">{item.cantidad}</span>
                   <Button variant="outline" size="icon" className="h-6 w-6"
-                    onClick={() => { const s = stock?.find(s => s.codigo === item.productoCodigo); if (s) addToCart(s); }}>+</Button>
+                    disabled={item.tipo === "combo"} onClick={() => { const s = stock?.find(s => s.codigo === item.productoCodigo); if (s) addToCart(s); }}>+</Button>
                 </div>
                 <span className="text-xs font-medium w-20 text-right">{fmt(item.cantidad * item.precioUnitario)}</span>
               </div>

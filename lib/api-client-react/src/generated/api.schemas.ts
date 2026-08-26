@@ -86,6 +86,19 @@ export interface ActualizarProductoBody {
   proveedorId?: number;
 }
 
+export type ItemVentaTipo = (typeof ItemVentaTipo)[keyof typeof ItemVentaTipo];
+
+export const ItemVentaTipo = {
+  producto: "producto",
+  combo: "combo",
+} as const;
+
+export interface SeleccionCombo {
+  productoCodigo: string;
+  productoNombre: string;
+  cantidad: number;
+}
+
 export interface ItemVenta {
   id: number;
   ventaId: number;
@@ -95,6 +108,10 @@ export interface ItemVenta {
   precioUnitario: number;
   precioCosto: number;
   subtotal: number;
+  tipo: ItemVentaTipo;
+  /** @nullable */
+  comboId: number | null;
+  selecciones: SeleccionCombo[];
 }
 
 export interface Venta {
@@ -119,9 +136,21 @@ export interface ItemVentaInput {
   cantidad: number;
 }
 
+export interface SeleccionComboInput {
+  productoCodigo: string;
+  /** @minimum 1 */
+  cantidad: number;
+}
+
+export interface ComboVentaInput {
+  comboId: number;
+  selecciones: SeleccionComboInput[];
+}
+
 export interface RegistrarVentaBody {
   vendedor: string;
   items: ItemVentaInput[];
+  combos?: ComboVentaInput[];
 }
 
 export interface ItemCompra {
@@ -155,6 +184,13 @@ export interface RegistrarCompraBody {
   items: ItemCompraInput[];
 }
 
+export type ComboTipo = (typeof ComboTipo)[keyof typeof ComboTipo];
+
+export const ComboTipo = {
+  fijo: "fijo",
+  a_eleccion: "a_eleccion",
+} as const;
+
 export interface ComboItem {
   productoCodigo: string;
   productoNombre: string;
@@ -167,11 +203,21 @@ export interface Combo {
   nombre: string;
   descripcion: string;
   precioVenta: number;
+  tipo: ComboTipo;
+  cantidadEleccion: number;
   activo: boolean;
   creadoEn: string;
   actualizadoEn: string;
   items: ComboItem[];
 }
+
+export type ComboInputTipo =
+  (typeof ComboInputTipo)[keyof typeof ComboInputTipo];
+
+export const ComboInputTipo = {
+  fijo: "fijo",
+  a_eleccion: "a_eleccion",
+} as const;
 
 export interface ComboItemInput {
   /** @minLength 1 */
@@ -186,6 +232,9 @@ export interface ComboInput {
   descripcion?: string;
   /** @minimum 0 */
   precioVenta: number;
+  tipo?: ComboInputTipo;
+  /** @minimum 1 */
+  cantidadEleccion?: number;
   /** @minItems 1 */
   items: ComboItemInput[];
 }
