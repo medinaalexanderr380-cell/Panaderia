@@ -168,7 +168,9 @@ router.delete("/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(EliminarComboResponse.parse({ mensaje: "Combo eliminado" }));
+  res.json(EliminarComboResponse.parse({
+    mensaje: "Combo disuelto. Los productos y el stock se conservaron.",
+  }));
 });
 
 export default router;

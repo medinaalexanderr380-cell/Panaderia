@@ -114,12 +114,15 @@ export default function Combos() {
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListarCombosQueryKey() });
-        toast({ title: "Combo eliminado" });
+        toast({
+          title: "Combo disuelto",
+          description: "Los productos y su stock no se modificaron.",
+        });
         setComboToDelete(null);
       },
       onError: (error: any) => {
         toast({
-          title: "Error al eliminar combo",
+          title: "Error al disolver combo",
           description: error?.response?.data?.error || "Ocurrió un error inesperado",
           variant: "destructive",
         });
@@ -456,7 +459,8 @@ export default function Combos() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                      aria-label={`Borrar combo ${combo.nombre}`}
+                      title="Disolver combo"
+                      aria-label={`Disolver combo ${combo.nombre}`}
                       onClick={() => setComboToDelete({ id: combo.id, nombre: combo.nombre })}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -499,9 +503,9 @@ export default function Combos() {
       <AlertDialog open={!!comboToDelete} onOpenChange={open => { if (!open) setComboToDelete(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Borrar combo?</AlertDialogTitle>
+            <AlertDialogTitle>¿Disolver combo?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se eliminará <strong>{comboToDelete?.nombre}</strong> junto con los productos incluidos. Esta acción no se puede deshacer.
+              Se quitará <strong>{comboToDelete?.nombre}</strong> como promoción. Los productos originales y su stock en depósito o camionetas permanecerán sin cambios.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -510,7 +514,7 @@ export default function Combos() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => comboToDelete && eliminarMutation.mutate({ id: comboToDelete.id })}
             >
-              {eliminarMutation.isPending ? "Borrando..." : "Borrar combo"}
+              {eliminarMutation.isPending ? "Disolviendo..." : "Disolver combo"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
