@@ -146,17 +146,28 @@ router.delete("/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [combo] = await db
-    .select({ id: combosTable.id })
-    .from(combosTable)
-    .where(eq(combosTable.id, parsed.data.id));
+  const deletedCombo = await db.transaction(async (tx) => {
+    const [combo] = await tx
+      .select({ id: combosTable.id })
+      .from(combosTable)
+      .where(eq(combosTable.id, parsed.data.id));
 
-  if (!combo) {
+    if (!combo) return null;
+
+    await tx.delete(comboItemsTable).where(eq(comboItemsTable.comboId, combo.id));
+    const [deleted] = await tx
+      .delete(combosTable)
+      .where(eq(combosTable.id, combo.id))
+      .returning({ id: combosTable.id });
+
+    return deleted ?? null;
+  });
+
+  if (!deletedCombo) {
     res.status(404).json({ error: "Combo no encontrado" });
     return;
   }
 
-  await db.delete(combosTable).where(eq(combosTable.id, combo.id));
   res.json(EliminarComboResponse.parse({ mensaje: "Combo eliminado" }));
 });
 

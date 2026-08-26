@@ -292,6 +292,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MensajeResponse"
+        "404":
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Product is still used by a combo or delivery vehicle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /ventas:
     get:

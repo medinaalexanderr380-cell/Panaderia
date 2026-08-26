@@ -1,6 +1,13 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
-import { productosTable, proveedoresTable } from "@workspace/db";
+import {
+  camionetasTable,
+  comboItemsTable,
+  combosTable,
+  db,
+  productosTable,
+  proveedoresTable,
+  stockCamionetaTable,
+} from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
   CrearProductoBody,
@@ -8,6 +15,7 @@ import {
   ActualizarProductoParams,
   ActualizarProductoBody,
   EliminarProductoParams,
+  EliminarProductoResponse,
 } from "@workspace/api-zod";
 
 const router = Router();
@@ -139,11 +147,53 @@ router.put("/:codigo", async (req, res) => {
   });
 });
 
-router.delete("/:codigo", async (req, res) => {
+router.delete("/:codigo", async (req, res): Promise<void> => {
   const parsed = EliminarProductoParams.safeParse({ codigo: req.params.codigo });
-  if (!parsed.success) return res.status(400).json({ error: "Código inválido" });
-  await db.delete(productosTable).where(eq(productosTable.codigo, parsed.data.codigo));
-  return res.json({ mensaje: "Producto eliminado" });
+  if (!parsed.success) {
+    res.status(400).json({ error: "Código inválido" });
+    return;
+  }
+
+  const [producto] = await db
+    .select({ codigo: productosTable.codigo, nombre: productosTable.nombre })
+    .from(productosTable)
+    .where(eq(productosTable.codigo, parsed.data.codigo));
+
+  if (!producto) {
+    res.status(404).json({ error: "Producto no encontrado" });
+    return;
+  }
+
+  const [combos, stockCamionetas] = await Promise.all([
+    db
+      .select({ nombre: combosTable.nombre })
+      .from(comboItemsTable)
+      .innerJoin(combosTable, eq(comboItemsTable.comboId, combosTable.id))
+      .where(eq(comboItemsTable.productoCodigo, producto.codigo)),
+    db
+      .select({ nombre: camionetasTable.nombre, cantidad: stockCamionetaTable.cantidad })
+      .from(stockCamionetaTable)
+      .innerJoin(camionetasTable, eq(stockCamionetaTable.camionetaId, camionetasTable.id))
+      .where(eq(stockCamionetaTable.productoCodigo, producto.codigo)),
+  ]);
+
+  const usos: string[] = [];
+  if (combos.length > 0) {
+    usos.push(`está incluido en el combo ${combos.map(combo => `"${combo.nombre}"`).join(", ")}`);
+  }
+  if (stockCamionetas.length > 0) {
+    usos.push(`tiene stock asignado en ${stockCamionetas.map(camioneta => `"${camioneta.nombre}" (${camioneta.cantidad})`).join(", ")}`);
+  }
+
+  if (usos.length > 0) {
+    res.status(409).json({
+      error: `No se puede eliminar "${producto.nombre}" porque ${usos.join(" y ")}. Quitá esas referencias antes de eliminarlo.`,
+    });
+    return;
+  }
+
+  await db.delete(productosTable).where(eq(productosTable.codigo, producto.codigo));
+  res.json(EliminarProductoResponse.parse({ mensaje: "Producto eliminado" }));
 });
 
 export default router;

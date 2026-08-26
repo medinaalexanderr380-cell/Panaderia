@@ -102,7 +102,11 @@ export default function Productos() {
         queryClient.invalidateQueries({ queryKey: getListarProductosQueryKey() });
         toast({ title: "Producto eliminado" });
       },
-      onError: () => toast({ title: "Error al eliminar producto", variant: "destructive" })
+      onError: (error: any) => toast({
+        title: "No se puede eliminar el producto",
+        description: error?.data?.error || error?.response?.data?.error || "Ocurrió un error inesperado",
+        variant: "destructive",
+      })
     }
   });
 

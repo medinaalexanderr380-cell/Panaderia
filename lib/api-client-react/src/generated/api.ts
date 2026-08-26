@@ -1168,7 +1168,7 @@ export const eliminarProducto = async (
 };
 
 export const getEliminarProductoMutationOptions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -1209,13 +1209,13 @@ export type EliminarProductoMutationResult = NonNullable<
   Awaited<ReturnType<typeof eliminarProducto>>
 >;
 
-export type EliminarProductoMutationError = ErrorType<unknown>;
+export type EliminarProductoMutationError = ErrorType<ErrorResponse>;
 
 /**
  * @summary Delete a product
  */
 export const useEliminarProducto = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
