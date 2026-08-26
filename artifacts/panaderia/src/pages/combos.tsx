@@ -3,22 +3,23 @@ import { useQueryClient } from "@tanstack/react-query";
 import { 
   useListarCombos, getListarCombosQueryKey,
   useCrearCombo,
-  useListarProductos
+  useListarProductos,
+  useEliminarCombo
 } from "@workspace/api-client-react";
 import { 
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Layers, Plus, Search, X, PackagePlus, Info } from "lucide-react";
+import { Layers, Plus, Search, X, PackagePlus, Info, Trash2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
 const comboSchema = z.object({
@@ -37,7 +38,10 @@ export default function Combos() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<string>("");
+  const [productSearch, setProductSearch] = useState("");
+  const [showProductSuggestions, setShowProductSuggestions] = useState(false);
   const [selectedQty, setSelectedQty] = useState<number | "">(1);
+  const [comboToDelete, setComboToDelete] = useState<{ id: number; nombre: string } | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -63,6 +67,20 @@ export default function Combos() {
   const watchItems = form.watch("items") || [];
   const precioVenta = form.watch("precioVenta") || 0;
 
+  const productSuggestions = useMemo(() => {
+    const query = productSearch.trim().toLowerCase();
+    const available = (productos ?? []).filter(product =>
+      !watchItems.some(item => item.productoCodigo === product.codigo),
+    );
+    if (!query) return available.slice(0, 8);
+    return available
+      .filter(product =>
+        product.nombre.toLowerCase().includes(query) ||
+        product.codigo.toLowerCase().includes(query),
+      )
+      .slice(0, 8);
+  }, [productSearch, productos, watchItems]);
+
   const valorNormal = useMemo(() => {
     return watchItems.reduce((total, item) => {
       const prod = productos?.find(p => p.codigo === item.productoCodigo);
@@ -78,6 +96,8 @@ export default function Combos() {
         setIsDialogOpen(false);
         form.reset();
         setSelectedProduct("");
+        setProductSearch("");
+        setShowProductSuggestions(false);
         setSelectedQty(1);
       },
       onError: (error: any) => {
@@ -90,6 +110,23 @@ export default function Combos() {
     }
   });
 
+  const eliminarMutation = useEliminarCombo({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListarCombosQueryKey() });
+        toast({ title: "Combo eliminado" });
+        setComboToDelete(null);
+      },
+      onError: (error: any) => {
+        toast({
+          title: "Error al eliminar combo",
+          description: error?.response?.data?.error || "Ocurrió un error inesperado",
+          variant: "destructive",
+        });
+      },
+    },
+  });
+
   const onSubmit = (data: ComboFormValues) => {
     crearMutation.mutate({ data });
   };
@@ -99,6 +136,8 @@ export default function Combos() {
     if (!open) {
       form.reset();
       setSelectedProduct("");
+      setProductSearch("");
+      setShowProductSuggestions(false);
       setSelectedQty(1);
     }
   };
@@ -115,7 +154,15 @@ export default function Combos() {
     }
     
     setSelectedProduct("");
+    setProductSearch("");
+    setShowProductSuggestions(false);
     setSelectedQty(1);
+  };
+
+  const handleSelectProduct = (producto: { codigo: string; nombre: string }) => {
+    setSelectedProduct(producto.codigo);
+    setProductSearch(producto.nombre);
+    setShowProductSuggestions(false);
   };
 
   const filteredCombos = combos?.filter(c =>
@@ -189,18 +236,41 @@ export default function Combos() {
                   <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-end">
                     <div className="flex-1 w-full space-y-1">
                       <label className="text-xs font-medium text-muted-foreground">Producto</label>
-                      <Select value={selectedProduct} onValueChange={setSelectedProduct} disabled={isLoadingProductos}>
-                        <SelectTrigger>
-                          <SelectValue placeholder={isLoadingProductos ? "Cargando..." : "Buscar producto..."} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {productos?.map(p => (
-                            <SelectItem key={p.codigo} value={p.codigo}>
-                              {p.nombre} - {formatCurrency(p.precioVenta)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="relative">
+                        <Input
+                          value={productSearch}
+                          placeholder={isLoadingProductos ? "Cargando..." : "Escribí el nombre del producto..."}
+                          disabled={isLoadingProductos}
+                          onFocus={() => setShowProductSuggestions(true)}
+                          onChange={e => {
+                            setProductSearch(e.target.value);
+                            setSelectedProduct("");
+                            setShowProductSuggestions(true);
+                          }}
+                          autoComplete="off"
+                        />
+                        {showProductSuggestions && productSuggestions.length > 0 && (
+                          <div className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
+                            {productSuggestions.map(producto => (
+                              <button
+                                key={producto.codigo}
+                                type="button"
+                                className="flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                                onMouseDown={e => e.preventDefault()}
+                                onClick={() => handleSelectProduct(producto)}
+                              >
+                                <span className="font-medium">{producto.nombre}</span>
+                                <span className="ml-3 shrink-0 text-xs text-muted-foreground">{formatCurrency(producto.precioVenta)}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {showProductSuggestions && productSearch.trim() && productSuggestions.length === 0 && (
+                          <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover p-3 text-sm text-muted-foreground shadow-md">
+                            No hay productos que coincidan.
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="w-full sm:w-24 space-y-1">
                       <label className="text-xs font-medium text-muted-foreground">Cant.</label>
@@ -375,11 +445,23 @@ export default function Combos() {
                   <h3 className="font-bold text-lg leading-tight text-foreground group-hover:text-primary transition-colors">
                     {combo.nombre}
                   </h3>
-                  {combo.activo ? (
-                    <Badge variant="secondary" className="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-100 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border-transparent shadow-none">Activo</Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-muted-foreground shadow-none">Inactivo</Badge>
-                  )}
+                  <div className="flex items-center gap-1">
+                    {combo.activo ? (
+                      <Badge variant="secondary" className="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-100 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border-transparent shadow-none">Activo</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground shadow-none">Inactivo</Badge>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      aria-label={`Borrar combo ${combo.nombre}`}
+                      onClick={() => setComboToDelete({ id: combo.id, nombre: combo.nombre })}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <p className="text-sm text-muted-foreground line-clamp-2 h-10">
                   {combo.descripcion || <span className="italic opacity-50">Sin descripción</span>}
@@ -413,6 +495,26 @@ export default function Combos() {
           ))}
         </div>
       )}
+
+      <AlertDialog open={!!comboToDelete} onOpenChange={open => { if (!open) setComboToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Borrar combo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará <strong>{comboToDelete?.nombre}</strong> junto con los productos incluidos. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => comboToDelete && eliminarMutation.mutate({ id: comboToDelete.id })}
+            >
+              {eliminarMutation.isPending ? "Borrando..." : "Borrar combo"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

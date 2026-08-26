@@ -2172,6 +2172,90 @@ export const useCrearCombo = <
 };
 
 /**
+ * @summary Delete a product combo
+ */
+export const getEliminarComboUrl = (id: number) => {
+  return `/api/combos/${id}`;
+};
+
+export const eliminarCombo = async (
+  id: number,
+  options?: RequestInit,
+): Promise<MensajeResponse> => {
+  return customFetch<MensajeResponse>(getEliminarComboUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getEliminarComboMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof eliminarCombo>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof eliminarCombo>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["eliminarCombo"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof eliminarCombo>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return eliminarCombo(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EliminarComboMutationResult = NonNullable<
+  Awaited<ReturnType<typeof eliminarCombo>>
+>;
+
+export type EliminarComboMutationError = ErrorType<void>;
+
+/**
+ * @summary Delete a product combo
+ */
+export const useEliminarCombo = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof eliminarCombo>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof eliminarCombo>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getEliminarComboMutationOptions(options));
+};
+
+/**
  * @summary List active delivery vehicles
  */
 export const getListarCamionetasUrl = () => {

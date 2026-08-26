@@ -503,6 +503,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/Combo"
 
+  /combos/{id}:
+    delete:
+      operationId: eliminarCombo
+      tags: [combos]
+      summary: Delete a product combo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted combo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MensajeResponse"
+        "404":
+          description: Combo not found
+
   /camioneta/camionetas:
     get:
       operationId: listarCamionetas

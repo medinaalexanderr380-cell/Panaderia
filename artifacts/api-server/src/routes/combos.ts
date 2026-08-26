@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, comboItemsTable, combosTable, productosTable } from "@workspace/db";
-import { CrearComboBody } from "@workspace/api-zod";
+import { CrearComboBody, EliminarComboParams, EliminarComboResponse } from "@workspace/api-zod";
 
 const router = Router();
 
@@ -137,6 +137,27 @@ router.post("/", async (req, res): Promise<void> => {
 
   const [createdCombo] = await consultarCombos(eq(combosTable.id, combo.id));
   res.status(201).json(createdCombo);
+});
+
+router.delete("/:id", async (req, res): Promise<void> => {
+  const parsed = EliminarComboParams.safeParse(req.params);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [combo] = await db
+    .select({ id: combosTable.id })
+    .from(combosTable)
+    .where(eq(combosTable.id, parsed.data.id));
+
+  if (!combo) {
+    res.status(404).json({ error: "Combo no encontrado" });
+    return;
+  }
+
+  await db.delete(combosTable).where(eq(combosTable.id, combo.id));
+  res.json(EliminarComboResponse.parse({ mensaje: "Combo eliminado" }));
 });
 
 export default router;

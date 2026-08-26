@@ -523,6 +523,17 @@ export const CrearComboBody = zod.object({
 });
 
 /**
+ * @summary Delete a product combo
+ */
+export const EliminarComboParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const EliminarComboResponse = zod.object({
+  mensaje: zod.string(),
+});
+
+/**
  * @summary List active delivery vehicles
  */
 export const ListarCamionetasResponseItem = zod.object({
