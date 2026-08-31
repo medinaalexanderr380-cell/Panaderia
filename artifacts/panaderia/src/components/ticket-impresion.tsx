@@ -41,7 +41,7 @@ export function TicketImpresion({ ticket, onClose }: { ticket: TicketData; onClo
     setBluetoothMensaje("");
     try {
       const nombre = await imprimirTicketBluetooth(ticket);
-      setBluetoothMensaje(`Ticket enviado a ${nombre}.`);
+        setBluetoothMensaje(`${nombre}: se intentó abrir la aplicación. Si no aparece, instalala y seleccioná la MTP-2 dentro de RawBT.`);
     } catch (error) {
       if (error instanceof DOMException && error.name === "NotFoundError") {
         setBluetoothMensaje("No se seleccionó ninguna impresora.");
@@ -89,7 +89,7 @@ export function TicketImpresion({ ticket, onClose }: { ticket: TicketData; onClo
           </div>
         </div>
         {bluetoothMensaje && (
-          <p className={`print:hidden px-4 py-2 text-xs ${bluetoothMensaje.startsWith("Ticket enviado") ? "text-emerald-700 bg-emerald-50" : "text-destructive bg-destructive/10"}`}>
+            <p className={`print:hidden px-4 py-2 text-xs ${bluetoothMensaje.startsWith("RawBT:") ? "text-emerald-700 bg-emerald-50" : "text-destructive bg-destructive/10"}`}>
             {bluetoothMensaje}
           </p>
         )}

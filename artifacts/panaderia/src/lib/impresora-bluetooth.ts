@@ -60,6 +60,13 @@ export function imprimirTicketBluetooth(ticket: TicketData) {
     throw new Error("RawBT funciona desde Android. En este dispositivo usá el botón Imprimir del navegador.");
   }
   const contenido = encodeURIComponent(ticketComoTexto(ticket));
-  window.location.href = `rawbt:${contenido}`;
+  const enlace = document.createElement("a");
+  enlace.href = `rawbt:${contenido}`;
+  enlace.target = "_blank";
+  enlace.rel = "noopener";
+  enlace.style.display = "none";
+  document.body.appendChild(enlace);
+  enlace.click();
+  window.setTimeout(() => enlace.remove(), 1000);
   return "RawBT";
 }
