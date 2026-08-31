@@ -16,11 +16,14 @@ import {
   EliminarCamionetaResponse,
   ListarCamionetasResponse,
 } from "@workspace/api-zod";
-import { requireAdmin, requireAuth } from "../middleware/auth";
+import {
+  getCamionetaCodigoAutorizado,
+  requireAdmin,
+  requireCamionetaAccess,
+} from "../middleware/auth";
 import { prepararCombos, type ComboSolicitado } from "../lib/combo-ventas";
 
 const router = Router();
-router.use(requireAuth);
 
 type OperacionItem = { productoCodigo: string; cantidad: number };
 type CargaItem = OperacionItem & { productoNombre: string; proveedor?: string };
@@ -240,9 +243,10 @@ router.get("/stock", async (req, res): Promise<void> => {
     })));
 });
 
-router.post("/cargar", async (req, res): Promise<void> => {
-  const { vendedor, items } = req.body as { vendedor: string; items: CargaItem[] };
-  const camioneta = await obtenerCamioneta(vendedor);
+router.post("/cargar", requireCamionetaAccess, async (req, res): Promise<void> => {
+  const { items } = req.body as { vendedor?: string; items: CargaItem[] };
+  const vendedor = getCamionetaCodigoAutorizado(req);
+  const camioneta = await obtenerCamioneta(vendedor ?? "");
   if (!camioneta) {
     res.status(404).json({ error: "Camioneta no encontrada" });
     return;
@@ -293,9 +297,10 @@ router.post("/cargar", async (req, res): Promise<void> => {
   res.json({ mensaje: "Carga realizada exitosamente", resultados });
 });
 
-router.post("/ventas", async (req, res): Promise<void> => {
-  const { vendedor, items, combos = [] } = req.body as { vendedor: string; items: OperacionItem[]; combos?: ComboSolicitado[] };
-  const camioneta = await obtenerCamioneta(vendedor);
+router.post("/ventas", requireCamionetaAccess, async (req, res): Promise<void> => {
+  const { items, combos = [] } = req.body as { vendedor?: string; items: OperacionItem[]; combos?: ComboSolicitado[] };
+  const vendedor = getCamionetaCodigoAutorizado(req);
+  const camioneta = await obtenerCamioneta(vendedor ?? "");
   if (!camioneta) {
     res.status(404).json({ error: "Camioneta no encontrada" });
     return;
@@ -388,9 +393,10 @@ router.post("/ventas", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/devolver", async (req, res): Promise<void> => {
-  const { vendedor, items } = req.body as { vendedor: string; items: OperacionItem[] };
-  const camioneta = await obtenerCamioneta(vendedor);
+router.post("/devolver", requireCamionetaAccess, async (req, res): Promise<void> => {
+  const { items } = req.body as { vendedor?: string; items: OperacionItem[] };
+  const vendedor = getCamionetaCodigoAutorizado(req);
+  const camioneta = await obtenerCamioneta(vendedor ?? "");
   if (!camioneta) {
     res.status(404).json({ error: "Camioneta no encontrada" });
     return;
@@ -421,8 +427,8 @@ router.post("/devolver", async (req, res): Promise<void> => {
   res.json({ mensaje: "Devolución al depósito realizada exitosamente" });
 });
 
-router.post("/caducado", async (req, res): Promise<void> => {
-  const { productoCodigo, cantidad, origen, vendedor } = req.body as {
+router.post("/caducado", requireCamionetaAccess, async (req, res): Promise<void> => {
+  const { productoCodigo, cantidad, origen } = req.body as {
     productoCodigo: string;
     cantidad: number;
     origen: "panaderia" | "camioneta";
@@ -441,7 +447,7 @@ router.post("/caducado", async (req, res): Promise<void> => {
 
   let camionetaId: number | null = null;
   if (origen === "camioneta") {
-    const camioneta = await obtenerCamioneta(vendedor ?? "");
+    const camioneta = await obtenerCamioneta(getCamionetaCodigoAutorizado(req) ?? "");
     if (!camioneta) {
       res.status(404).json({ error: "Camioneta no encontrada" });
       return;
@@ -465,7 +471,7 @@ router.post("/caducado", async (req, res): Promise<void> => {
     costoTotal: String(costoTotal),
     motivo: "caducado",
     origen: origen || "panaderia",
-    registradoPor: vendedor || "Sistema",
+    registradoPor: getCamionetaCodigoAutorizado(req) || "Sistema",
   });
 
   if (camionetaId !== null) {
