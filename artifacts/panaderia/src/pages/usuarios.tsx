@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/context/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,10 +16,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, Plus, Key, UserX, Edit2, ShieldCheck, User, Lock, Trash2 } from "lucide-react";
+import { Users, Plus, Key, UserX, Edit2, ShieldCheck, User, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-const ADMIN_PASSWORD = "04052005";
 
 interface Usuario {
   id: number;
@@ -40,57 +39,12 @@ const apiFetch = (url: string, opts: RequestInit) =>
   fetch(url, { ...opts, credentials: "include", headers: { "Content-Type": "application/json", ...(opts.headers || {}) } })
     .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error); return d; });
 
-function PantallaContrasena({ onAcceso }: { onAcceso: () => void }) {
-  const [pass, setPass] = useState("");
-  const [error, setError] = useState(false);
-  const { toast } = useToast();
-
-  const verificar = () => {
-    if (pass === ADMIN_PASSWORD) {
-      onAcceso();
-    } else {
-      setError(true);
-      setPass("");
-      toast({ title: "Contraseña incorrecta", variant: "destructive" });
-    }
-  };
-
-  return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center pb-2">
-          <div className="mx-auto w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mb-3">
-            <Lock className="w-7 h-7 text-primary" />
-          </div>
-          <CardTitle className="text-xl">Acceso restringido</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">Ingresá la contraseña de administrador para continuar</p>
-        </CardHeader>
-        <CardContent className="space-y-4 pt-4">
-          <Input
-            type="password"
-            placeholder="Contraseña"
-            value={pass}
-            onChange={e => { setPass(e.target.value); setError(false); }}
-            onKeyDown={e => e.key === "Enter" && verificar()}
-            className={error ? "border-destructive focus-visible:ring-destructive" : ""}
-            autoFocus
-          />
-          {error && <p className="text-destructive text-sm text-center">Contraseña incorrecta</p>}
-          <Button className="w-full" onClick={verificar} disabled={!pass}>
-            Ingresar
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 export default function Usuarios() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const puedeAdministrar = user?.rol === "admin";
   const { data: usuarios, isLoading } = useUsuarios();
-
-  const [acceso, setAcceso] = useState(false);
 
   const [dialogNuevo, setDialogNuevo] = useState(false);
   const [dialogEditar, setDialogEditar] = useState<Usuario | null>(null);
@@ -139,28 +93,20 @@ export default function Usuarios() {
     onError: (e: any) => toast({ title: "Error al reiniciar", description: e.message, variant: "destructive" }),
   });
 
-  if (!acceso) {
-    return <PantallaContrasena onAcceso={() => setAcceso(true)} />;
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
           <Users className="w-8 h-8 text-primary" /> Gestión de Usuarios
         </h1>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setAcceso(false)} className="text-xs gap-1 text-muted-foreground">
-            <Lock className="w-3.5 h-3.5" /> Bloquear
-          </Button>
+        {puedeAdministrar && (
           <Button onClick={() => { setForm({ username: "", nombre: "", password: "", rol: "vendedor" }); setDialogNuevo(true); }}>
             <Plus className="w-4 h-4 mr-2" /> Nuevo Usuario
           </Button>
-        </div>
+        )}
       </div>
 
-      {/* Zona de peligro */}
-      <Card className="border-destructive/40">
+      {puedeAdministrar && <Card className="border-destructive/40">
         <CardHeader className="pb-3">
           <CardTitle className="text-base text-destructive flex items-center gap-2">
             <Trash2 className="w-4 h-4" /> Zona de peligro
@@ -182,7 +128,7 @@ export default function Usuarios() {
             <Trash2 className="w-4 h-4 mr-1.5" /> Reiniciar datos
           </Button>
         </CardContent>
-      </Card>
+      </Card>}
 
       <Card>
         <CardHeader className="bg-muted/30 border-b pb-4">
@@ -196,7 +142,7 @@ export default function Usuarios() {
                 <TableHead>Nombre</TableHead>
                 <TableHead>Rol</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
+                <TableHead className="text-right">{puedeAdministrar ? "Acciones" : "Consulta"}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -218,7 +164,7 @@ export default function Usuarios() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
+                    {puedeAdministrar ? <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={() => { setEditForm({ nombre: u.nombre, rol: u.rol, activo: u.activo }); setDialogEditar(u); }}>
                         <Edit2 className="w-3.5 h-3.5" /> Editar
                       </Button>
@@ -230,7 +176,7 @@ export default function Usuarios() {
                           <UserX className="w-3.5 h-3.5" /> Desactivar
                         </Button>
                       )}
-                    </div>
+                    </div> : <span className="text-xs text-muted-foreground">Solo lectura</span>}
                   </TableCell>
                 </TableRow>
               ))}

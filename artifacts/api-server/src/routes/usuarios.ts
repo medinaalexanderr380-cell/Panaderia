@@ -3,10 +3,10 @@ import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
 import { usuariosTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { requireAdmin } from "../middleware/auth";
+import { requireAdmin, requireAuth } from "../middleware/auth";
 
 const router = Router();
-router.use(requireAdmin);
+router.use(requireAuth);
 
 router.get("/", async (req, res) => {
   const usuarios = await db
@@ -23,7 +23,7 @@ router.get("/", async (req, res) => {
   return res.json(usuarios);
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requireAdmin, async (req, res) => {
   const { username, nombre, password, rol } = req.body;
   if (!username || !nombre || !password) return res.status(400).json({ error: "Usuario, nombre y contraseña son requeridos" });
 
@@ -42,7 +42,7 @@ router.post("/", async (req, res) => {
   return res.status(201).json(nuevo);
 });
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", requireAdmin, async (req, res) => {
   const id = Number(req.params["id"]);
   const { nombre, rol, activo } = req.body;
   if (!nombre) return res.status(400).json({ error: "El nombre es requerido" });
@@ -56,7 +56,7 @@ router.put("/:id", async (req, res) => {
   return res.json(updated);
 });
 
-router.put("/:id/password", async (req, res) => {
+router.put("/:id/password", requireAdmin, async (req, res) => {
   const id = Number(req.params["id"]);
   const { password } = req.body;
   if (!password || password.length < 6) return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres" });
@@ -71,7 +71,7 @@ router.put("/:id/password", async (req, res) => {
   return res.json({ mensaje: "Contraseña actualizada" });
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireAdmin, async (req, res) => {
   const id = Number(req.params["id"]);
 
   const [updated] = await db.update(usuariosTable)

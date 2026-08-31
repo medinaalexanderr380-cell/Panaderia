@@ -33,8 +33,6 @@ interface CartItem { id: string; tipo: "producto" | "combo"; productoCodigo: str
 interface CargaItem { productoCodigo: string; productoNombre: string; cantidad: number; proveedor: string }
 interface Camioneta { id: number; codigo: string; nombre: string; activo: boolean; stockTotal: number; creadoEn: string }
 
-const DEV_PASSWORD = "04052005";
-
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
 function useCamionetaStock(vendedor: Vendedor) {
@@ -829,10 +827,6 @@ export default function Camioneta() {
   const { data: camionetasData = [] } = useListarCamionetas();
   const camionetas = camionetasData as Camioneta[];
 
-  // ── Cambiar camioneta (requiere contraseña dev) ──
-  const [devDialogOpen, setDevDialogOpen] = useState(false);
-  const [devPassword, setDevPassword] = useState("");
-  const [devError, setDevError] = useState("");
   const [selectorOpen, setSelectorOpen] = useState(false);
 
   // ── Gestión de camionetas (requiere inicio de sesión como administrador) ──
@@ -944,14 +938,6 @@ export default function Camioneta() {
     { id: "venta", label: "Venta en Ruta", icon: ShoppingCart },
   ];
 
-  const handleDevConfirm = () => {
-    if (devPassword !== DEV_PASSWORD) { setDevError("Contraseña incorrecta"); return; }
-    setDevDialogOpen(false);
-    setDevPassword("");
-    setDevError("");
-    setSelectorOpen(true);
-  };
-
   const nombreVendedor = camionetas.find(c => c.codigo === vendedorSeleccionado)?.nombre;
 
   return (
@@ -969,7 +955,7 @@ export default function Camioneta() {
               variant="outline"
               size="sm"
               className="text-xs text-muted-foreground gap-1"
-              onClick={() => { setDevPassword(""); setDevError(""); setDevDialogOpen(true); }}
+              onClick={() => setSelectorOpen(true)}
             >
               <Plus className="w-3.5 h-3.5" /> Cambiar camioneta
             </Button>
@@ -1089,39 +1075,7 @@ export default function Camioneta() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Dialog: contraseña dev para cambiar camioneta */}
-      <Dialog open={devDialogOpen} onOpenChange={open => { if (!open) { setDevDialogOpen(false); setDevPassword(""); setDevError(""); } }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Lock className="w-5 h-5 text-primary" /> Acceso de desarrollador
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <p className="text-sm text-muted-foreground">Ingresá la contraseña de desarrollador para cambiar de camioneta</p>
-            <div className="relative">
-              <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                className="pl-9 text-xl tracking-widest"
-                type="password"
-                inputMode="numeric"
-                placeholder="••••"
-                value={devPassword}
-                onChange={e => { setDevPassword(e.target.value); setDevError(""); }}
-                onKeyDown={e => e.key === "Enter" && devPassword && handleDevConfirm()}
-                autoFocus
-              />
-            </div>
-            {devError && <p className="text-destructive text-sm bg-destructive/10 p-2 rounded">{devError}</p>}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDevDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleDevConfirm} disabled={!devPassword}>Confirmar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog: selector de camioneta (solo después de autenticar con dev) */}
+      {/* Dialog: selector de camioneta */}
       <Dialog open={selectorOpen} onOpenChange={setSelectorOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
