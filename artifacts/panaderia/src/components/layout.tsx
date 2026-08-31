@@ -6,7 +6,6 @@ import {
 import { cn } from "@/lib/utils";
 import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/context/auth";
-import { Button } from "@/components/ui/button";
 
 interface LayoutProps {
   children: React.ReactNode;

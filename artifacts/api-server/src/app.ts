@@ -9,6 +9,10 @@ import { seedAdminIfEmpty } from "./lib/seed-admin";
 
 const app: Express = express();
 
+// Replit termina HTTPS en su proxy. Express necesita confiar en ese proxy para
+// poder emitir correctamente las cookies de sesión marcadas como Secure.
+app.set("trust proxy", 1);
+
 app.use(
   pinoHttp({
     logger,

@@ -1,3 +1,4 @@
 - [Dynamic truck stock migration](dynamic-truck-stock-migration.md) — Legacy Michel/David stock is moved once into dynamic truck inventory without resurrecting deleted trucks.
 - [Product deletion references](product-deletion-references.md) — Products used by combos or truck stock are protected rather than cascade-deleted.
 - [Native Node test imports](native-node-test-imports.md) — The native TypeScript test runner cannot resolve extensionless workspace directory imports used by the DB package.
+- [Secure sessions behind Replit proxy](secure-sessions-replit-proxy.md) — Production session cookies require Express to trust Replit's HTTPS-terminating proxy.
