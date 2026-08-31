@@ -3,6 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Receipt, Printer } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
+import { useState } from "react";
+import { Bluetooth, Loader2 } from "lucide-react";
+import { imprimirTicketBluetooth } from "@/lib/impresora-bluetooth";
 
 export interface TicketItem {
   nombre: string;
@@ -21,6 +24,8 @@ export interface TicketData {
 }
 
 export function TicketImpresion({ ticket, onClose }: { ticket: TicketData; onClose: () => void }) {
+  const [bluetoothOcupado, setBluetoothOcupado] = useState(false);
+  const [bluetoothMensaje, setBluetoothMensaje] = useState("");
   const fmtP = (n: number) =>
     new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
 
@@ -30,6 +35,23 @@ export function TicketImpresion({ ticket, onClose }: { ticket: TicketData; onClo
   })();
 
   const totalUnidades = ticket.items.reduce((s, i) => s + i.cantidad, 0);
+
+  const imprimirPorBluetooth = async () => {
+    setBluetoothOcupado(true);
+    setBluetoothMensaje("");
+    try {
+      const nombre = await imprimirTicketBluetooth(ticket);
+      setBluetoothMensaje(`Ticket enviado a ${nombre}.`);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "NotFoundError") {
+        setBluetoothMensaje("No se seleccionó ninguna impresora.");
+      } else {
+        setBluetoothMensaje(error instanceof Error ? error.message : "No se pudo conectar con la impresora.");
+      }
+    } finally {
+      setBluetoothOcupado(false);
+    }
+  };
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -60,8 +82,17 @@ export function TicketImpresion({ ticket, onClose }: { ticket: TicketData; onClo
             <Button size="sm" onClick={() => window.print()} className="gap-1.5">
               <Printer className="w-3.5 h-3.5" /> Imprimir
             </Button>
+            <Button size="sm" variant="outline" onClick={imprimirPorBluetooth} disabled={bluetoothOcupado} className="gap-1.5">
+              {bluetoothOcupado ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bluetooth className="w-3.5 h-3.5" />}
+              Bluetooth
+            </Button>
           </div>
         </div>
+        {bluetoothMensaje && (
+          <p className={`print:hidden px-4 py-2 text-xs ${bluetoothMensaje.startsWith("Ticket enviado") ? "text-emerald-700 bg-emerald-50" : "text-destructive bg-destructive/10"}`}>
+            {bluetoothMensaje}
+          </p>
+        )}
 
         {/* Ticket */}
         <div
