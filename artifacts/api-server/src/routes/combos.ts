@@ -2,8 +2,10 @@ import { Router } from "express";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, comboItemsTable, combosTable, productosTable } from "@workspace/db";
 import { CrearComboBody, EliminarComboParams, EliminarComboResponse } from "@workspace/api-zod";
+import { requireAdmin, requireAuth } from "../middleware/auth";
 
 const router = Router();
+router.use(requireAuth);
 
 type ComboRow = {
   id: number;
@@ -102,7 +104,7 @@ router.get("/", async (_req, res): Promise<void> => {
   res.json(combos);
 });
 
-router.post("/", async (req, res): Promise<void> => {
+router.post("/", requireAdmin, async (req, res): Promise<void> => {
   const parsed = CrearComboBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -154,7 +156,7 @@ router.post("/", async (req, res): Promise<void> => {
   res.status(201).json(createdCombo);
 });
 
-router.delete("/:id", async (req, res): Promise<void> => {
+router.delete("/:id", requireAdmin, async (req, res): Promise<void> => {
   const parsed = EliminarComboParams.safeParse(req.params);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

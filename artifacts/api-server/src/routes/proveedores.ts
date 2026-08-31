@@ -12,8 +12,10 @@ import {
   ObtenerComprasPorProveedorParams,
   ObtenerResumenProveedorParams,
 } from "@workspace/api-zod";
+import { requireAdmin, requireAuth } from "../middleware/auth";
 
 const router = Router();
+router.use(requireAuth);
 
 router.get("/", async (req, res) => {
   const proveedores = await db.select().from(proveedoresTable).orderBy(proveedoresTable.nombre);
@@ -24,7 +26,7 @@ router.get("/", async (req, res) => {
   })));
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requireAdmin, async (req, res) => {
   const parsed = CrearProveedorBody.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.message });
@@ -49,7 +51,7 @@ router.get("/:id", async (req, res) => {
   });
 });
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", requireAdmin, async (req, res) => {
   const paramParsed = ActualizarProveedorParams.safeParse({ id: Number(req.params.id) });
   if (!paramParsed.success) return res.status(400).json({ error: "ID inválido" });
   const bodyParsed = ActualizarProveedorBody.safeParse(req.body);
@@ -67,7 +69,7 @@ router.put("/:id", async (req, res) => {
   });
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireAdmin, async (req, res) => {
   const parsed = EliminarProveedorParams.safeParse({ id: Number(req.params.id) });
   if (!parsed.success) return res.status(400).json({ error: "ID inválido" });
   await db.delete(proveedoresTable).where(eq(proveedoresTable.id, parsed.data.id));
