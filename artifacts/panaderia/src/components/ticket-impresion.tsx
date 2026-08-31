@@ -84,7 +84,7 @@ export function TicketImpresion({ ticket, onClose }: { ticket: TicketData; onClo
             </Button>
             <Button size="sm" variant="outline" onClick={imprimirPorBluetooth} disabled={bluetoothOcupado} className="gap-1.5">
               {bluetoothOcupado ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bluetooth className="w-3.5 h-3.5" />}
-              Bluetooth
+              RawBT
             </Button>
           </div>
         </div>
