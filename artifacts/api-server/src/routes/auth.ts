@@ -7,6 +7,24 @@ import type { AuthenticatedSession } from "../middleware/auth";
 
 const router = Router();
 
+router.post("/auto-login", async (req, res) => {
+  const usuarios = await db.select().from(usuariosTable);
+  const usuario = usuarios.find((u) => u.activo && u.rol !== "admin");
+
+  if (!usuario) {
+    return res.status(503).json({ error: "No hay un usuario vendedor activo disponible" });
+  }
+
+  const session = req.session as unknown as AuthenticatedSession;
+  session.userId = usuario.id;
+  session.username = usuario.username;
+  session.nombre = usuario.nombre;
+  session.rol = usuario.rol;
+  session.camionetaCodigo = usuario.username.trim().toLowerCase();
+
+  return res.json({ id: usuario.id, username: usuario.username, nombre: usuario.nombre, rol: usuario.rol });
+});
+
 router.post("/login", async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: "Usuario y contraseña requeridos" });

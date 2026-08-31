@@ -4,7 +4,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/layout";
 import { AuthProvider, useAuth } from "@/context/auth";
-import Login from "@/pages/login";
 import { ErrorBoundary } from "@/components/error-boundary";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
@@ -34,7 +33,18 @@ function AuthenticatedRouter() {
     );
   }
 
-  if (!user) return <Login />;
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-6 text-center">
+        <div className="max-w-sm space-y-2">
+          <h1 className="text-lg font-semibold text-foreground">No se pudo abrir RegistroAM</h1>
+          <p className="text-sm text-muted-foreground">
+            No hay un usuario vendedor activo disponible. Revisá la conexión con el servidor.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Layout>

@@ -7,8 +7,6 @@ import { cn } from "@/lib/utils";
 import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/context/auth";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { LogOut } from "lucide-react";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -84,8 +82,7 @@ function ServerBanner({ status, showBanner }: { status: ServerStatus; showBanner
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
   const { status, showBanner } = useServerStatus();
-  const { user, logout } = useAuth();
-  const { toast } = useToast();
+  const { user } = useAuth();
 
   const mainNav = [
     { name: "Inicio", href: "/", icon: Store },
@@ -115,11 +112,6 @@ export function Layout({ children }: LayoutProps) {
 
   const isActive = (href: string) =>
     href === "/" ? location === "/" : location.startsWith(href);
-
-  const handleLogout = async () => {
-    await logout();
-    toast({ title: "Sesión cerrada" });
-  };
 
   return (
     <div className="min-h-screen bg-background font-sans flex flex-col">
@@ -185,9 +177,6 @@ export function Layout({ children }: LayoutProps) {
                   <p className="text-xs text-sidebar-foreground/60 capitalize">{user?.rol === "admin" ? "Administrador" : "Vendedor"}</p>
                 </div>
               </div>
-              <Button variant="ghost" size="sm" className="w-full justify-start text-sidebar-foreground/70 hover:text-destructive" onClick={handleLogout}>
-                <LogOut className="w-4 h-4 mr-2" /> Cerrar sesión
-              </Button>
             </div>
           </nav>
         </aside>
@@ -210,9 +199,6 @@ export function Layout({ children }: LayoutProps) {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-sidebar-foreground/60">{user?.nombre}</span>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-sidebar-foreground/60 hover:text-destructive" onClick={handleLogout}>
-              <LogOut className="w-4 h-4" />
-            </Button>
           </div>
         </header>
 
