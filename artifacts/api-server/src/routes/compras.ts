@@ -3,8 +3,10 @@ import { db } from "@workspace/db";
 import { comprasTable, itemsCompraTable, productosTable, proveedoresTable } from "@workspace/db";
 import { eq, gte, lte, and, SQL } from "drizzle-orm";
 import { RegistrarCompraBody, ListarComprasQueryParams } from "@workspace/api-zod";
+import { requireAuth } from "../middleware/auth";
 
 const router = Router();
+router.use(requireAuth);
 
 async function compraConItems(compra: typeof comprasTable.$inferSelect) {
   const items = await db.select().from(itemsCompraTable).where(eq(itemsCompraTable.compraId, compra.id));

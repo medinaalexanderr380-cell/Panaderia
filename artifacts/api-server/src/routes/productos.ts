@@ -17,8 +17,10 @@ import {
   EliminarProductoParams,
   EliminarProductoResponse,
 } from "@workspace/api-zod";
+import { requireAdmin, requireAuth } from "../middleware/auth";
 
 const router = Router();
+router.use(requireAuth);
 
 router.get("/", async (req, res) => {
   const productos = await db
@@ -50,7 +52,7 @@ router.get("/", async (req, res) => {
   })));
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requireAdmin, async (req, res) => {
   const parsed = CrearProductoBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
 
@@ -113,7 +115,7 @@ router.get("/:codigo", async (req, res) => {
   });
 });
 
-router.put("/:codigo", async (req, res) => {
+router.put("/:codigo", requireAdmin, async (req, res) => {
   const paramParsed = ActualizarProductoParams.safeParse({ codigo: req.params.codigo });
   if (!paramParsed.success) return res.status(400).json({ error: "Código inválido" });
   const bodyParsed = ActualizarProductoBody.safeParse(req.body);
@@ -147,7 +149,7 @@ router.put("/:codigo", async (req, res) => {
   });
 });
 
-router.delete("/:codigo", async (req, res): Promise<void> => {
+router.delete("/:codigo", requireAdmin, async (req, res): Promise<void> => {
   const parsed = EliminarProductoParams.safeParse({ codigo: req.params.codigo });
   if (!parsed.success) {
     res.status(400).json({ error: "Código inválido" });

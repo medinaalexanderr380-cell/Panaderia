@@ -34,8 +34,12 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const session = getAuthenticatedSession(req);
+  if (!session.userId || !session.username) {
+    res.status(401).json({ error: "No autenticado" });
+    return;
+  }
   if (session?.rol !== "admin") {
-    res.status(403).json({ error: "Solo un administrador puede gestionar camionetas" });
+    res.status(403).json({ error: "Solo un administrador puede realizar esta acción" });
     return;
   }
   next();

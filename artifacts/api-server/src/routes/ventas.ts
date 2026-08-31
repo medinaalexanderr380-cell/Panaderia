@@ -4,8 +4,10 @@ import { camionetasTable, itemsVentaTable, productosTable, stockCamionetaTable, 
 import { eq, gte, inArray, lte, and, sql, SQL } from "drizzle-orm";
 import { RegistrarVentaBody, ListarVentasQueryParams, ObtenerVentaParams, EliminarVentaParams } from "@workspace/api-zod";
 import { prepararCombos } from "../lib/combo-ventas";
+import { requireAdmin, requireAuth } from "../middleware/auth";
 
 const router = Router();
+router.use(requireAuth);
 
 async function ventaConItems(venta: typeof ventasTable.$inferSelect) {
   const items = await db.select().from(itemsVentaTable).where(eq(itemsVentaTable.ventaId, venta.id));
@@ -142,7 +144,7 @@ router.get("/dia/:fecha", async (req, res) => {
   });
 });
 
-router.delete("/dia/:fecha", async (req, res) => {
+router.delete("/dia/:fecha", requireAdmin, async (req, res) => {
   const { fecha } = req.params;
 
   const ventasDia = await db
@@ -296,7 +298,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // Delete single sale
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireAdmin, async (req, res) => {
   const parsed = EliminarVentaParams.safeParse({ id: Number(req.params.id) });
   if (!parsed.success) return res.status(400).json({ error: "ID inválido" });
   const id = parsed.data.id;

@@ -3,8 +3,10 @@ import { db } from "@workspace/db";
 import { gastosTable } from "@workspace/db";
 import { eq, gte, desc, sql } from "drizzle-orm";
 import { insertGastoSchema } from "@workspace/db";
+import { requireAdmin, requireAuth } from "../middleware/auth";
 
 const router = Router();
+router.use(requireAuth);
 
 router.get("/", async (req, res) => {
   const { desde, hasta } = req.query as Record<string, string>;
@@ -36,7 +38,7 @@ router.post("/", async (req, res) => {
   return res.status(201).json(gasto);
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (isNaN(id)) return res.status(400).json({ error: "ID inválido" });
   await db.delete(gastosTable).where(eq(gastosTable.id, id));

@@ -5,6 +5,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState, useRef } from "react";
+import { useAuth } from "@/context/auth";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { LogOut } from "lucide-react";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -80,6 +84,8 @@ function ServerBanner({ status, showBanner }: { status: ServerStatus; showBanner
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
   const { status, showBanner } = useServerStatus();
+  const { user, logout } = useAuth();
+  const { toast } = useToast();
 
   const mainNav = [
     { name: "Inicio", href: "/", icon: Store },
@@ -109,6 +115,11 @@ export function Layout({ children }: LayoutProps) {
 
   const isActive = (href: string) =>
     href === "/" ? location === "/" : location.startsWith(href);
+
+  const handleLogout = async () => {
+    await logout();
+    toast({ title: "Sesión cerrada" });
+  };
 
   return (
     <div className="min-h-screen bg-background font-sans flex flex-col">
@@ -148,7 +159,7 @@ export function Layout({ children }: LayoutProps) {
             </div>
 
             <div className="border-t border-sidebar-border pt-3 pb-4 mt-4 space-y-1">
-              {adminNav.map((item) => (
+              {user?.rol === "admin" && adminNav.map((item) => (
                 <Link
                   key={item.name}
                   href={item.href}
@@ -164,6 +175,20 @@ export function Layout({ children }: LayoutProps) {
                 </Link>
               ))}
             </div>
+            <div className="p-4 border-t border-sidebar-border">
+              <div className="flex items-center gap-3 mb-3 px-1">
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                  <span className="text-sm font-bold text-primary">{user?.nombre?.charAt(0).toUpperCase()}</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-sidebar-foreground truncate">{user?.nombre}</p>
+                  <p className="text-xs text-sidebar-foreground/60 capitalize">{user?.rol === "admin" ? "Administrador" : "Vendedor"}</p>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" className="w-full justify-start text-sidebar-foreground/70 hover:text-destructive" onClick={handleLogout}>
+                <LogOut className="w-4 h-4 mr-2" /> Cerrar sesión
+              </Button>
+            </div>
           </nav>
         </aside>
 
@@ -176,12 +201,18 @@ export function Layout({ children }: LayoutProps) {
 
       {/* ── MOBILE: header + contenido + barra inferior ── */}
       <div className="flex flex-col md:hidden flex-1">
-        <header className="bg-sidebar border-b border-sidebar-border px-4 py-3 flex items-center sticky top-0 z-40">
+        <header className="bg-sidebar border-b border-sidebar-border px-4 py-3 flex items-center justify-between sticky top-0 z-40">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center">
               <Store className="w-4 h-4 text-primary-foreground" />
             </div>
             <span className="text-lg font-bold tracking-tight text-sidebar-foreground">RegistroAM</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-sidebar-foreground/60">{user?.nombre}</span>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-sidebar-foreground/60 hover:text-destructive" onClick={handleLogout}>
+              <LogOut className="w-4 h-4" />
+            </Button>
           </div>
         </header>
 

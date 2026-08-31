@@ -3,10 +3,10 @@ import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
 import { usuariosTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { requireAuth } from "../middleware/auth";
+import { requireAdmin } from "../middleware/auth";
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireAdmin);
 
 router.get("/", async (req, res) => {
   const usuarios = await db
