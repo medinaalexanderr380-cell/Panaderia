@@ -60,10 +60,14 @@ export function imprimirTicketBluetooth(ticket: TicketData) {
     throw new Error("RawBT funciona desde Android. En este dispositivo usá el botón Imprimir del navegador.");
   }
   const contenido = encodeURIComponent(ticketComoTexto(ticket));
+  const playStore = encodeURIComponent(
+    "https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter",
+  );
+  const intentRawBt =
+    `intent:${contenido}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;` +
+    `S.browser_fallback_url=${playStore};end`;
   const enlace = document.createElement("a");
-  enlace.href = `rawbt:${contenido}`;
-  enlace.target = "_blank";
-  enlace.rel = "noopener";
+  enlace.href = intentRawBt;
   enlace.style.display = "none";
   document.body.appendChild(enlace);
   enlace.click();
