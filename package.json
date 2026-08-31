@@ -7,7 +7,8 @@
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "build:prod": "pnpm run typecheck:libs && BASE_PATH=/ pnpm --filter @workspace/panaderia run build && pnpm --filter @workspace/api-server run build",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "validate:db-deployment": "node ./scripts/validate-db-deployment.mjs"
   },
   "private": true,
   "devDependencies": {

@@ -21,8 +21,18 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
+- `pnpm --filter @workspace/db run push` — apply non-destructive DB schema changes (dev only)
+- `pnpm run validate:db-deployment` — validate the schema/deployment ordering safeguards
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
+
+## Safe database update order
+
+1. Update the Drizzle schema source and generate the checked-in migration artifacts under `lib/db/drizzle/`.
+2. After the task is merged, `scripts/post-merge.sh` installs the locked dependencies and runs `pnpm --filter @workspace/db run push` against the development database.
+3. Verify the application in development. The development sync is intentionally non-forced: it applies additive changes and stops on potentially destructive changes instead of truncating historical sales.
+4. Publish the application. Replit compares development and production, shows possible renames for confirmation, and applies the approved schema diff to production before starting the new version.
+
+The API production build and startup do not run database DDL. Do not add `db:push`, `drizzle-kit push`, or startup-time `ALTER TABLE`/`CREATE TABLE` commands to those paths. If Publish reports a destructive or ambiguous change, resolve it in the Publish UI before publishing rather than bypassing the safeguard.
 
 ## Application: Sistema de Panificación
 
