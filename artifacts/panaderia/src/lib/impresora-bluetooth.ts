@@ -13,64 +13,121 @@ const ajustarLinea = (texto: string, ancho = 32) => {
   return lineas;
 };
 
-const padLine = (izquierda: string, derecha: string, ancho = 32) => {
-  const left = limpiarTexto(izquierda).slice(0, ancho);
-  const right = limpiarTexto(derecha).slice(0, ancho);
-  return `${left}${" ".repeat(Math.max(1, ancho - left.length - right.length))}${right}`;
-};
-
 function formatearNumero(numero: number) {
   return `$${numero.toFixed(2)}`;
 }
 
-function ticketComoTexto(ticket: TicketData) {
-  const lineas: string[] = [
-    "          REGISTROAM",
-    ticket.origen === "camioneta" ? "         VENTA EN RUTA" : "       SISTEMA DE GESTION",
-    "-".repeat(32),
-    `Ticket: #${String(ticket.id ?? "").padStart(4, "0")}`,
-    `Fecha: ${new Date(ticket.fecha).toLocaleString("es-AR")}`,
-    `Vendedor: ${ticket.vendedor}`,
-    "-".repeat(32),
+const CLEANTER_URL = "http://localhost:9100";
+
+type CleanterBlock =
+  | { type: "text"; text: string; align?: "left" | "center" | "right"; bold?: boolean; size?: "normal" | "large" }
+  | { type: "row"; left: string; right: string; bold?: boolean }
+  | { type: "divider" }
+  | { type: "feed"; lines: number };
+
+type CleanterHealth = {
+  status?: string;
+  printer?: {
+    connected?: boolean;
+    name?: string;
+    problem?: string | null;
+  };
+};
+
+function ticketParaCleanter(ticket: TicketData): CleanterBlock[] {
+  const bloques: CleanterBlock[] = [
+    { type: "text", text: "REGISTROAM", align: "center", bold: true, size: "large" },
+    {
+      type: "text",
+      text: ticket.origen === "camioneta" ? "VENTA EN RUTA" : "SISTEMA DE GESTION",
+      align: "center",
+    },
+    { type: "divider" },
   ];
 
-  for (const item of ticket.items) {
-    lineas.push(...ajustarLinea(item.nombre));
-    lineas.push(padLine(`${item.cantidad} x ${formatearNumero(item.precioUnitario)}`, formatearNumero(item.subtotal)));
+  if (ticket.id) {
+    bloques.push({ type: "row", left: "Ticket", right: `#${String(ticket.id).padStart(4, "0")}` });
   }
 
-  lineas.push(
-    "-".repeat(32),
-    padLine("TOTAL", formatearNumero(ticket.total)),
-    "",
-    "     Gracias por su compra!",
-    "",
-    "",
+  bloques.push(
+    { type: "row", left: "Fecha", right: new Date(ticket.fecha).toLocaleString("es-AR") },
+    { type: "row", left: "Vendedor", right: limpiarTexto(ticket.vendedor) },
+    { type: "divider" },
   );
-  return lineas.join("\n");
+
+  for (const item of ticket.items) {
+    for (const linea of ajustarLinea(item.nombre)) {
+      bloques.push({ type: "text", text: linea, bold: true });
+    }
+    bloques.push({
+      type: "row",
+      left: `${item.cantidad} x ${formatearNumero(item.precioUnitario)}`,
+      right: formatearNumero(item.subtotal),
+    });
+  }
+
+  bloques.push(
+    { type: "divider" },
+    { type: "row", left: "TOTAL", right: formatearNumero(ticket.total), bold: true },
+    { type: "text", text: "Gracias por su compra!", align: "center", bold: true },
+    { type: "text", text: "Conserve su ticket", align: "center" },
+    { type: "feed", lines: 3 },
+  );
+
+  return bloques;
 }
 
-/**
- * RawBT registra el esquema rawbt: en Android y recibe texto URL-encoded.
- * La llamada debe ocurrir desde una acción del usuario para que Chrome permita
- * abrir la aplicación externa.
- */
-export function imprimirTicketBluetooth(ticket: TicketData) {
-  if (!/Android/i.test(navigator.userAgent)) {
-    throw new Error("RawBT funciona desde Android. En este dispositivo usá el botón Imprimir del navegador.");
+function mensajeProblemaCleanter(problem?: string | null) {
+  switch (problem) {
+    case "bluetooth_disabled":
+      return "Activá el Bluetooth del teléfono.";
+    case "printer_unreachable":
+      return "La impresora no responde. Verificá que esté encendida y cerca.";
+    case "printer_not_selected":
+      return "Seleccioná la MTP-2 como impresora predeterminada dentro de Cleanter.";
+    default:
+      return "Abrí Cleanter y verificá que la MTP-2 figure conectada.";
   }
-  const contenido = encodeURIComponent(ticketComoTexto(ticket));
-  const playStore = encodeURIComponent(
-    "https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter",
-  );
-  const intentRawBt =
-    `intent:${contenido}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;` +
-    `S.browser_fallback_url=${playStore};end`;
-  const enlace = document.createElement("a");
-  enlace.href = intentRawBt;
-  enlace.style.display = "none";
-  document.body.appendChild(enlace);
-  enlace.click();
-  window.setTimeout(() => enlace.remove(), 1000);
-  return "RawBT";
+}
+
+export async function imprimirTicketBluetooth(ticket: TicketData) {
+  if (!/Android/i.test(navigator.userAgent)) {
+    throw new Error("Cleanter funciona desde Android. En este dispositivo usá el botón Imprimir del navegador.");
+  }
+
+  let health: CleanterHealth;
+  try {
+    const respuesta = await fetch(`${CLEANTER_URL}/health`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!respuesta.ok) throw new Error();
+    health = await respuesta.json();
+  } catch {
+    throw new Error("No se encontró Cleanter. Abrí la aplicación Cleanter y volvé a intentar.");
+  }
+
+  if (!health.printer?.connected) {
+    throw new Error(mensajeProblemaCleanter(health.printer?.problem));
+  }
+
+  const respuesta = await fetch(`${CLEANTER_URL}/print`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      paperWidth: 58,
+      cut: false,
+      reference: ticket.id ? `RegistroAM #${ticket.id}` : "RegistroAM",
+      content: ticketParaCleanter(ticket),
+    }),
+  });
+
+  if (!respuesta.ok) {
+    const error = await respuesta.json().catch(() => ({}));
+    throw new Error(
+      error.detail || error.fix || mensajeProblemaCleanter(error.error),
+    );
+  }
+
+  return health.printer.name ? `Cleanter (${health.printer.name})` : "Cleanter";
 }
