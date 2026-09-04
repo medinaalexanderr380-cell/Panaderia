@@ -3,9 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Receipt, Printer } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
-import { useState } from "react";
-import { Bluetooth, Loader2 } from "lucide-react";
-import { imprimirTicketBluetooth } from "@/lib/impresora-bluetooth";
 
 export interface TicketItem {
   nombre: string;
@@ -24,8 +21,6 @@ export interface TicketData {
 }
 
 export function TicketImpresion({ ticket, onClose }: { ticket: TicketData; onClose: () => void }) {
-  const [bluetoothOcupado, setBluetoothOcupado] = useState(false);
-  const [bluetoothMensaje, setBluetoothMensaje] = useState("");
   const fmtP = (n: number) =>
     new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
 
@@ -36,38 +31,40 @@ export function TicketImpresion({ ticket, onClose }: { ticket: TicketData; onClo
 
   const totalUnidades = ticket.items.reduce((s, i) => s + i.cantidad, 0);
 
-  const imprimirPorBluetooth = async () => {
-    setBluetoothOcupado(true);
-    setBluetoothMensaje("");
-    try {
-      const nombre = await imprimirTicketBluetooth(ticket);
-      setBluetoothMensaje(`${nombre}: ticket impreso correctamente.`);
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "NotFoundError") {
-        setBluetoothMensaje("No se seleccionó ninguna impresora.");
-      } else {
-        setBluetoothMensaje(error instanceof Error ? error.message : "No se pudo conectar con la impresora.");
-      }
-    } finally {
-      setBluetoothOcupado(false);
-    }
-  };
-
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-[340px] p-0 overflow-hidden gap-0">
         <style>{`
           @media print {
+            @page {
+              size: 58mm auto;
+              margin: 0;
+            }
+            html, body {
+              width: 58mm !important;
+              min-width: 58mm !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              background: white !important;
+            }
             body * { visibility: hidden !important; }
             #ticket-print-area, #ticket-print-area * { visibility: visible !important; }
             #ticket-print-area {
-              position: fixed !important;
+              position: absolute !important;
               left: 0 !important;
               top: 0 !important;
-              width: 80mm !important;
-              padding: 4mm !important;
+              width: 58mm !important;
+              min-height: 0 !important;
+              padding: 2mm !important;
+              margin: 0 !important;
+              box-sizing: border-box !important;
               font-family: 'Courier New', monospace !important;
-              font-size: 11pt !important;
+              font-size: 9pt !important;
+              line-height: 1.2 !important;
+              color: black !important;
+              background: white !important;
+              print-color-adjust: exact !important;
+              -webkit-print-color-adjust: exact !important;
             }
           }
         `}</style>
@@ -80,19 +77,10 @@ export function TicketImpresion({ ticket, onClose }: { ticket: TicketData; onClo
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={onClose}>Cerrar</Button>
             <Button size="sm" onClick={() => window.print()} className="gap-1.5">
-              <Printer className="w-3.5 h-3.5" /> Imprimir
-            </Button>
-            <Button size="sm" variant="outline" onClick={imprimirPorBluetooth} disabled={bluetoothOcupado} className="gap-1.5">
-              {bluetoothOcupado ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bluetooth className="w-3.5 h-3.5" />}
-              Cleanter
+              <Printer className="w-3.5 h-3.5" /> Imprimir ticket
             </Button>
           </div>
         </div>
-        {bluetoothMensaje && (
-            <p className={`print:hidden px-4 py-2 text-xs ${bluetoothMensaje.startsWith("Cleanter") ? "text-emerald-700 bg-emerald-50" : "text-destructive bg-destructive/10"}`}>
-            {bluetoothMensaje}
-          </p>
-        )}
 
         {/* Ticket */}
         <div
