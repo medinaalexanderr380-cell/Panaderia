@@ -50,7 +50,7 @@ export default function Dashboard() {
       <h1 className="text-3xl font-bold tracking-tight text-foreground">Resumen General</h1>
 
       {stockBajo && stockBajo.length > 0 && (
-        <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive-foreground">
+        <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Alerta de Inventario</AlertTitle>
           <AlertDescription>
