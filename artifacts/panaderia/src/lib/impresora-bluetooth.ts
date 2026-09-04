@@ -20,9 +20,7 @@ function formatearNumero(numero: number) {
 const CLEANTER_URL = "http://localhost:9100";
 
 type CleanterBlock =
-  | { type: "text"; text: string; align?: "left" | "center" | "right"; bold?: boolean; size?: "normal" | "large" }
-  | { type: "row"; left: string; right: string; bold?: boolean }
-  | { type: "divider" }
+  | { type: "text"; text: string }
   | { type: "feed"; lines: number };
 
 type CleanterHealth = {
@@ -35,46 +33,56 @@ type CleanterHealth = {
 };
 
 function ticketParaCleanter(ticket: TicketData): CleanterBlock[] {
-  const bloques: CleanterBlock[] = [
-    { type: "text", text: "REGISTROAM", align: "center", bold: true, size: "large" },
-    {
-      type: "text",
-      text: ticket.origen === "camioneta" ? "VENTA EN RUTA" : "SISTEMA DE GESTION",
-      align: "center",
-    },
-    { type: "divider" },
+  const ancho = 32;
+  const separador = "-".repeat(ancho);
+  const centrar = (texto: string) => {
+    const limpio = limpiarTexto(texto).slice(0, ancho);
+    return limpio.padStart(limpio.length + Math.floor((ancho - limpio.length) / 2));
+  };
+  const fila = (izquierda: string, derecha: string) => {
+    const izq = limpiarTexto(izquierda);
+    const der = limpiarTexto(derecha);
+    const espacio = Math.max(1, ancho - izq.length - der.length);
+    return `${izq}${" ".repeat(espacio)}${der}`.slice(0, ancho);
+  };
+
+  // Se usan solamente bloques de texto simples. Algunas impresoras económicas
+  // alimentan papel pero ignoran los comandos ESC/POS de estilo y columnas.
+  const lineas: string[] = [
+    centrar("REGISTROAM"),
+    centrar(ticket.origen === "camioneta" ? "VENTA EN RUTA" : "SISTEMA DE GESTION"),
+    separador,
   ];
 
   if (ticket.id) {
-    bloques.push({ type: "row", left: "Ticket", right: `#${String(ticket.id).padStart(4, "0")}` });
+    lineas.push(fila("Ticket", `#${String(ticket.id).padStart(4, "0")}`));
   }
 
-  bloques.push(
-    { type: "row", left: "Fecha", right: new Date(ticket.fecha).toLocaleString("es-AR") },
-    { type: "row", left: "Vendedor", right: limpiarTexto(ticket.vendedor) },
-    { type: "divider" },
+  lineas.push(
+    ...ajustarLinea(`Fecha: ${new Date(ticket.fecha).toLocaleString("es-AR")}`),
+    ...ajustarLinea(`Vendedor: ${ticket.vendedor}`),
+    separador,
   );
 
   for (const item of ticket.items) {
-    for (const linea of ajustarLinea(item.nombre)) {
-      bloques.push({ type: "text", text: linea, bold: true });
-    }
-    bloques.push({
-      type: "row",
-      left: `${item.cantidad} x ${formatearNumero(item.precioUnitario)}`,
-      right: formatearNumero(item.subtotal),
-    });
+    lineas.push(
+      ...ajustarLinea(item.nombre),
+      fila(`${item.cantidad} x ${formatearNumero(item.precioUnitario)}`, formatearNumero(item.subtotal)),
+    );
   }
 
-  bloques.push(
-    { type: "divider" },
-    { type: "row", left: "TOTAL", right: formatearNumero(ticket.total), bold: true },
-    { type: "text", text: "Gracias por su compra!", align: "center", bold: true },
-    { type: "text", text: "Conserve su ticket", align: "center" },
-    { type: "feed", lines: 3 },
+  lineas.push(
+    separador,
+    fila("TOTAL", formatearNumero(ticket.total)),
+    separador,
+    centrar("Gracias por su compra!"),
+    centrar("Conserve su ticket"),
   );
 
-  return bloques;
+  return [
+    ...lineas.map((text) => ({ type: "text" as const, text })),
+    { type: "feed", lines: 3 },
+  ];
 }
 
 function mensajeProblemaCleanter(problem?: string | null) {
