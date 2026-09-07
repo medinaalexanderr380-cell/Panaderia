@@ -45,6 +45,22 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+export function requireAdminOrDavidForPrices(req: Request, res: Response, next: NextFunction) {
+  const session = getAuthenticatedSession(req);
+  if (!session.userId || !session.username) {
+    res.status(401).json({ error: "No autenticado" });
+    return;
+  }
+
+  const esDavid = session.username.trim().toLowerCase() === "david";
+  if (session.rol !== "admin" && !esDavid) {
+    res.status(403).json({ error: "Solo el administrador o David pueden actualizar precios" });
+    return;
+  }
+
+  next();
+}
+
 /**
  * Authorizes an operation against a delivery vehicle.
  *

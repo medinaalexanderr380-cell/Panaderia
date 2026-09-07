@@ -17,7 +17,12 @@ import {
   EliminarProductoParams,
   EliminarProductoResponse,
 } from "@workspace/api-zod";
-import { requireAdmin, requireAuth } from "../middleware/auth";
+import {
+  requireAdmin,
+  requireAdminOrDavidForPrices,
+  requireAuth,
+  type AuthenticatedSession,
+} from "../middleware/auth";
 
 const router = Router();
 router.use(requireAuth);
@@ -115,13 +120,26 @@ router.get("/:codigo", async (req, res) => {
   });
 });
 
-router.put("/:codigo", requireAdmin, async (req, res) => {
+router.put("/:codigo", requireAdminOrDavidForPrices, async (req, res) => {
   const paramParsed = ActualizarProductoParams.safeParse({ codigo: req.params.codigo });
   if (!paramParsed.success) return res.status(400).json({ error: "Código inválido" });
   const bodyParsed = ActualizarProductoBody.safeParse(req.body);
   if (!bodyParsed.success) return res.status(400).json({ error: bodyParsed.error.message });
 
-  const updateData: Record<string, unknown> = { ...bodyParsed.data, actualizadoEn: new Date() };
+  const session = req.session as unknown as AuthenticatedSession;
+  const puedeEditarProductoCompleto = session.rol === "admin";
+  const updateData: Record<string, unknown> = puedeEditarProductoCompleto
+    ? { ...bodyParsed.data, actualizadoEn: new Date() }
+    : { actualizadoEn: new Date() };
+
+  if (
+    !puedeEditarProductoCompleto
+    && bodyParsed.data.precioVenta === undefined
+    && bodyParsed.data.precioCosto === undefined
+  ) {
+    return res.status(400).json({ error: "David solo puede actualizar los precios del producto" });
+  }
+
   if (bodyParsed.data.precioVenta !== undefined) updateData.precioVenta = String(bodyParsed.data.precioVenta);
   if (bodyParsed.data.precioCosto !== undefined) updateData.precioCosto = String(bodyParsed.data.precioCosto);
 
