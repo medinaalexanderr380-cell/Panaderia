@@ -102,14 +102,32 @@ export function TicketImpresion({ ticket, onClose }: { ticket: TicketData; onClo
               margin-top: 2mm;
             }
             .pie { margin-top: 3mm; }
+            .acciones {
+              width: 58mm;
+              padding: 3mm 2mm;
+              background: #fff;
+            }
+            .imprimir {
+              width: 100%;
+              min-height: 12mm;
+              border: 0;
+              border-radius: 2mm;
+              background: #155eef;
+              color: #fff;
+              font: 700 11pt sans-serif;
+            }
             @media print {
               html, body, .ticket {
                 width: 58mm;
               }
+              .acciones { display: none !important; }
             }
           </style>
         </head>
         <body>
+          <div class="acciones">
+            <button class="imprimir" type="button" onclick="window.print()">Imprimir ahora</button>
+          </div>
           <main class="ticket">
             <header class="centro">
               <div class="titulo">REGISTROAM</div>
@@ -131,12 +149,6 @@ export function TicketImpresion({ ticket, onClose }: { ticket: TicketData; onClo
             </div>
             <div style="height: 8mm"></div>
           </main>
-          <script>
-            window.addEventListener("load", function () {
-              setTimeout(function () { window.print(); }, 300);
-            });
-            window.addEventListener("afterprint", function () { window.close(); });
-          </script>
         </body>
       </html>`);
     ventana.document.close();
