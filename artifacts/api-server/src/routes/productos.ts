@@ -127,7 +127,11 @@ router.put("/:codigo", requireAdminOrDavidForPrices, async (req, res) => {
   if (!bodyParsed.success) return res.status(400).json({ error: bodyParsed.error.message });
 
   const session = req.session as unknown as AuthenticatedSession;
-  const puedeEditarProductoCompleto = session.rol === "admin";
+  const puedeEditarProductoCompleto =
+    session.rol === "admin" || session.adminActionAuthorized === true;
+  if (session.adminActionAuthorized) {
+    session.adminActionAuthorized = false;
+  }
   const updateData: Record<string, unknown> = puedeEditarProductoCompleto
     ? { ...bodyParsed.data, actualizadoEn: new Date() }
     : { actualizadoEn: new Date() };

@@ -58,6 +58,31 @@ router.get("/me", (req, res) => {
   return res.json({ id: s.userId, username: s.username, nombre: s.nombre, rol: s.rol });
 });
 
+router.post("/verify-admin-password", async (req, res) => {
+  const session = req.session as unknown as AuthenticatedSession;
+  if (!session.userId || !session.username) {
+    return res.status(401).json({ error: "No autenticado" });
+  }
+
+  const { password } = req.body;
+  if (typeof password !== "string" || !password) {
+    return res.status(400).json({ error: "Contraseña requerida" });
+  }
+
+  const usuarios = await db.select().from(usuariosTable);
+  const administradores = usuarios.filter((usuario) => usuario.activo && usuario.rol === "admin");
+  const verificaciones = await Promise.all(
+    administradores.map((administrador) => bcrypt.compare(password, administrador.passwordHash)),
+  );
+
+  if (!verificaciones.some(Boolean)) {
+    return res.status(401).json({ error: "Contraseña de administrador incorrecta" });
+  }
+
+  session.adminActionAuthorized = true;
+  return res.json({ valido: true });
+});
+
 router.post("/verify", async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: "Usuario y contraseña requeridos" });

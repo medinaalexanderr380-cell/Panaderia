@@ -6,6 +6,7 @@ export type AuthenticatedSession = {
   nombre?: string;
   rol?: string;
   camionetaCodigo?: string;
+  adminActionAuthorized?: boolean;
 };
 
 function getAuthenticatedSession(req: Request): AuthenticatedSession {

@@ -24,6 +24,7 @@ import * as z from "zod";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { useAuth } from "@/context/auth";
 
 const generarCodigo = (nombre: string) => {
   const base = nombre.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 16);
@@ -51,7 +52,12 @@ export default function Productos() {
   const [compraProveedor, setCompraProveedor] = useState("");
   const [compraCantidad, setCompraCantidad] = useState<number | "">(1);
   const [compraCosto, setCompraCosto] = useState<number | "">(0);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminPasswordOpen, setAdminPasswordOpen] = useState(false);
+  const [autorizandoAdmin, setAutorizandoAdmin] = useState(false);
+  const [pendingUpdate, setPendingUpdate] = useState<any>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const { data: productos, isLoading } = useListarProductos();
@@ -149,9 +155,58 @@ export default function Productos() {
     const { proveedorNombre, ...rest } = data;
     const proveedorId = resolverProveedorId(proveedorNombre);
     if (editingProducto) {
-      actualizarMutation.mutate({ codigo: editingProducto.codigo, data: { ...rest, proveedorId } });
+      const update = { codigo: editingProducto.codigo, data: { ...rest, proveedorId } };
+      const cambiaDatosProtegidos =
+        rest.nombre !== editingProducto.nombre
+        || (rest.descripcion || "") !== (editingProducto.descripcion || "")
+        || Number(rest.stock) !== Number(editingProducto.stock)
+        || Number(rest.stockMinimo) !== Number(editingProducto.stockMinimo)
+        || rest.unidad !== editingProducto.unidad
+        || (proveedorId ?? null) !== (editingProducto.proveedorId ?? null);
+
+      if (user?.rol !== "admin" && cambiaDatosProtegidos) {
+        setPendingUpdate(update);
+        setAdminPassword("");
+        setAdminPasswordOpen(true);
+        return;
+      }
+
+      actualizarMutation.mutate(update);
     } else {
       crearMutation.mutate({ data: { ...rest, codigo: generarCodigo(data.nombre), proveedorId } });
+    }
+  };
+
+  const confirmarContrasenaAdmin = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!pendingUpdate || !adminPassword) return;
+
+    setAutorizandoAdmin(true);
+    try {
+      const respuesta = await fetch("/api/auth/verify-admin-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ password: adminPassword }),
+      });
+      const resultado = await respuesta.json().catch(() => ({}));
+      if (!respuesta.ok) {
+        throw new Error(resultado.error || "Contraseña incorrecta");
+      }
+
+      setAdminPasswordOpen(false);
+      setAdminPassword("");
+      const update = pendingUpdate;
+      setPendingUpdate(null);
+      actualizarMutation.mutate(update);
+    } catch (error) {
+      toast({
+        title: "No se pudo autorizar el cambio",
+        description: error instanceof Error ? error.message : "Contraseña incorrecta",
+        variant: "destructive",
+      });
+    } finally {
+      setAutorizandoAdmin(false);
     }
   };
 
@@ -450,6 +505,51 @@ export default function Productos() {
               </div>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={adminPasswordOpen}
+        onOpenChange={(open) => {
+          setAdminPasswordOpen(open);
+          if (!open) {
+            setAdminPassword("");
+            setPendingUpdate(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Autorizar cambio</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={confirmarContrasenaAdmin} className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Para cambiar datos distintos de los precios, ingresá la contraseña del administrador.
+            </p>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Contraseña</label>
+              <Input
+                type="password"
+                value={adminPassword}
+                onChange={(event) => setAdminPassword(event.target.value)}
+                autoFocus
+                autoComplete="current-password"
+                required
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAdminPasswordOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={autorizandoAdmin || !adminPassword}>
+                {autorizandoAdmin ? "Verificando..." : "Autorizar y guardar"}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
