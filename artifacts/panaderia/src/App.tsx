@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -17,6 +17,7 @@ import Camioneta from "@/pages/camioneta";
 import Usuarios from "@/pages/usuarios";
 import Perdidas from "@/pages/perdidas";
 import Gastos from "@/pages/gastos";
+import ImprimirTicket from "@/pages/imprimir-ticket";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1 } },
@@ -24,6 +25,7 @@ const queryClient = new QueryClient({
 
 function AuthenticatedRouter() {
   const { user, loading } = useAuth();
+  const [location] = useLocation();
 
   if (loading) {
     return (
@@ -44,6 +46,10 @@ function AuthenticatedRouter() {
         </div>
       </div>
     );
+  }
+
+  if (location === "/imprimir-ticket") {
+    return <ImprimirTicket />;
   }
 
   return (
