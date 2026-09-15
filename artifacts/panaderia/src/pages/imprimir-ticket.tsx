@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ArrowLeft, Printer } from "lucide-react";
 import type { TicketData } from "@/components/ticket-impresion";
 
@@ -10,6 +10,7 @@ function formatearPrecio(valor: number) {
 }
 
 export default function ImprimirTicket() {
+  const [enviando, setEnviando] = useState(false);
   const ticket = useMemo<TicketData | null>(() => {
     try {
       const guardado = sessionStorage.getItem("ticket-para-imprimir");
@@ -31,6 +32,65 @@ export default function ImprimirTicket() {
   }
 
   const fecha = new Date(ticket.fecha).toLocaleString("es-AR");
+
+  const imprimir = async () => {
+    if (!/Android/i.test(navigator.userAgent)) {
+      window.print();
+      return;
+    }
+
+    const contenido = document.querySelector(".ticket-termico")?.outerHTML;
+    if (!contenido) return;
+
+    setEnviando(true);
+    try {
+      const pagina = `<!doctype html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              @page { margin: 0; }
+              * { box-sizing: border-box; }
+              html, body { width: 58mm; margin: 0; padding: 0; color: #000; background: #fff; }
+              .ticket-termico { width: 58mm; padding: 2mm; font: 10pt/1.25 monospace; color: #000; }
+              header, .text-center { text-align: center; }
+              h1 { margin: 0; font-size: 14pt; }
+              p { margin: 0; }
+              hr { border: 0; border-top: 1px dashed #000; margin: 2mm 0; }
+              .flex { display: flex; }
+              .justify-between { justify-content: space-between; }
+              .gap-2 { gap: 2mm; }
+              .font-bold, strong { font-weight: 700; }
+              .mb-2 { margin-bottom: 2mm; }
+              .mt-2 { margin-top: 2mm; }
+              .mt-3 { margin-top: 3mm; }
+              .pt-2 { padding-top: 2mm; }
+              .border-t { border-top: 1px solid #000; }
+              .break-words { overflow-wrap: anywhere; }
+              .h-\\[8mm\\] { height: 8mm; }
+            </style>
+          </head>
+          <body>${contenido}</body>
+        </html>`;
+
+      const comprimido = new Blob([JSON.stringify([pagina])])
+        .stream()
+        .pipeThrough(new CompressionStream("gzip"));
+      const bytes = new Uint8Array(await new Response(comprimido).arrayBuffer());
+      let binario = "";
+      const tamanoBloque = 8192;
+      for (let inicio = 0; inicio < bytes.length; inicio += tamanoBloque) {
+        binario += String.fromCharCode(...bytes.subarray(inicio, inicio + tamanoBloque));
+      }
+      const contenidoBase64 = btoa(binario);
+      window.location.href =
+        `intent://#Intent;scheme=print-intent;S.content=${encodeURIComponent(contenidoBase64)};end`;
+    } catch {
+      window.alert("No se pudo abrir Open ESC/POS. Verificá que esté instalado y actualizado.");
+    } finally {
+      setEnviando(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-white text-black">
@@ -62,11 +122,12 @@ export default function ImprimirTicket() {
         </button>
         <button
           type="button"
-          onClick={() => window.print()}
+          onClick={imprimir}
+          disabled={enviando}
           className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 font-sans text-sm font-bold text-white"
         >
           <Printer className="h-4 w-4" />
-          Imprimir ahora
+          {enviando ? "Abriendo impresora..." : "Imprimir ahora"}
         </button>
       </div>
 
