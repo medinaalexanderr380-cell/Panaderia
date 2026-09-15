@@ -125,7 +125,7 @@ export function Layout({ children }: LayoutProps) {
                 <Store className="w-5 h-5 text-primary-foreground" />
               </div>
               <span className="text-xl font-bold tracking-tight text-sidebar-foreground">
-                RegistroAM
+                Doble M distribuidora
               </span>
             </Link>
           </div>
@@ -194,7 +194,7 @@ export function Layout({ children }: LayoutProps) {
             <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center">
               <Store className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="text-lg font-bold tracking-tight text-sidebar-foreground">RegistroAM</span>
+            <span className="text-lg font-bold tracking-tight text-sidebar-foreground">Doble M distribuidora</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-sidebar-foreground/60">{user?.nombre}</span>

@@ -62,7 +62,7 @@ export function TicketImpresion({ ticket, onClose }: { ticket: TicketData; onClo
         <head>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>Ticket RegistroAM</title>
+          <title>Ticket Doble M distribuidora</title>
           <style>
             @page { margin: 0; }
             * { box-sizing: border-box; }
@@ -130,7 +130,7 @@ export function TicketImpresion({ ticket, onClose }: { ticket: TicketData; onClo
           </div>
           <main class="ticket">
             <header class="centro">
-              <div class="titulo">REGISTROAM</div>
+              <div class="titulo">DOBLE M DISTRIBUIDORA</div>
               <div class="subtitulo">${ticket.origen === "camioneta" ? "VENTA EN RUTA" : "SISTEMA DE GESTION"}</div>
             </header>
             <hr class="separador">
@@ -177,7 +177,7 @@ export function TicketImpresion({ ticket, onClose }: { ticket: TicketData; onClo
         >
           {/* Encabezado */}
           <div className="text-center mb-3">
-            <p className="font-bold text-[15px] tracking-widest">REGISTROAM</p>
+            <p className="font-bold text-[15px] tracking-widest">DOBLE M DISTRIBUIDORA</p>
             <p className="text-[10px] text-gray-500 tracking-wide">
               {ticket.origen === "camioneta" ? "Venta en Ruta" : "Sistema de Gestión"}
             </p>

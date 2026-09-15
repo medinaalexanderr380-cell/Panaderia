@@ -115,7 +115,7 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <ClipboardList className="w-5 h-5 text-primary" />
-              ¡Bienvenido a RegistroAM! — Primeros pasos
+              ¡Bienvenido a Doble M distribuidora! — Primeros pasos
             </CardTitle>
           </CardHeader>
           <CardContent>

@@ -33,8 +33,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["favicon.png", "icons/apple-touch-icon.png", "icons/pwa-192x192.png", "icons/pwa-512x512.png"],
       manifest: {
-        name: "RegistroAM",
-        short_name: "RegistroAM",
+        name: "Doble M distribuidora",
+        short_name: "Doble M",
         description: "Sistema de control de stock, ventas y compras",
         theme_color: "#2563eb",
         background_color: "#fffbea",

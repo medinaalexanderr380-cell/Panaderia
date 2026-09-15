@@ -37,7 +37,7 @@ function AuthenticatedRouter() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-6 text-center">
         <div className="max-w-sm space-y-2">
-          <h1 className="text-lg font-semibold text-foreground">No se pudo abrir RegistroAM</h1>
+          <h1 className="text-lg font-semibold text-foreground">No se pudo abrir Doble M distribuidora</h1>
           <p className="text-sm text-muted-foreground">
             No hay un usuario vendedor activo disponible. Revisá la conexión con el servidor.
           </p>
