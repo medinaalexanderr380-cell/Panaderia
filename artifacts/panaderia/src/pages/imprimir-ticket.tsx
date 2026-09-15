@@ -51,10 +51,23 @@ export default function ImprimirTicket() {
             <style>
               @page { margin: 0; }
               * { box-sizing: border-box; }
-              html, body { width: 58mm; margin: 0; padding: 0; color: #000; background: #fff; }
-              .ticket-termico { width: 58mm; padding: 2mm; font: 10pt/1.25 monospace; color: #000; }
+              html, body {
+                width: 100%;
+                margin: 0;
+                padding: 0;
+                color: #000;
+                background: #fff;
+              }
+              .ticket-termico {
+                width: 100%;
+                max-width: none;
+                margin: 0 auto;
+                padding: 1.5mm;
+                font: 12pt/1.25 monospace;
+                color: #000;
+              }
               header, .text-center { text-align: center; }
-              h1 { margin: 0; font-size: 14pt; }
+              h1 { margin: 0; font-size: 16pt; line-height: 1.1; }
               p { margin: 0; }
               hr { border: 0; border-top: 1px dashed #000; margin: 2mm 0; }
               .flex { display: flex; }
@@ -68,6 +81,7 @@ export default function ImprimirTicket() {
               .border-t { border-top: 1px solid #000; }
               .break-words { overflow-wrap: anywhere; }
               .h-\\[8mm\\] { height: 8mm; }
+              .text-\\[13pt\\] { font-size: 15pt; }
             </style>
           </head>
           <body>${contenido}</body>
