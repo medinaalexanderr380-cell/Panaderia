@@ -2,9 +2,9 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { camionetasTable, itemsVentaTable, productosTable, stockCamionetaTable, ventasTable } from "@workspace/db";
 import { eq, gte, inArray, lte, and, sql, SQL } from "drizzle-orm";
-import { RegistrarVentaBody, ListarVentasQueryParams, ObtenerVentaParams, EliminarVentaParams } from "@workspace/api-zod";
+import { RegistrarVentaBody, EditarVentaBody, ListarVentasQueryParams, ObtenerVentaParams, EliminarVentaParams } from "@workspace/api-zod";
 import { prepararCombos } from "../lib/combo-ventas";
-import { requireAdmin, requireAuth } from "../middleware/auth";
+import { requireAdminOrDavid, requireAuth } from "../middleware/auth";
 
 const router = Router();
 router.use(requireAuth);
@@ -144,24 +144,25 @@ router.get("/dia/:fecha", async (req, res) => {
   });
 });
 
-router.delete("/dia/:fecha", requireAdmin, async (req, res) => {
+router.delete("/dia/:fecha", requireAdminOrDavid, async (req, res) => {
   const { fecha } = req.params;
 
-  const ventasDia = await db
-    .select()
-    .from(ventasTable)
-    .where(sql`DATE(${ventasTable.fecha}) = ${fecha}`);
-
-  await db.transaction(async tx => {
+  const eliminadas = await db.transaction(async tx => {
+    const ventasDia = await tx
+      .select()
+      .from(ventasTable)
+      .where(sql`DATE(${ventasTable.fecha}) = ${fecha}`)
+      .for("update");
     for (const venta of ventasDia) {
       const items = await tx.select().from(itemsVentaTable).where(eq(itemsVentaTable.ventaId, venta.id));
       await restaurarStockVenta(tx, venta, items);
       await tx.delete(itemsVentaTable).where(eq(itemsVentaTable.ventaId, venta.id));
       await tx.delete(ventasTable).where(eq(ventasTable.id, venta.id));
     }
+    return ventasDia.length;
   });
 
-  return res.json({ mensaje: `${ventasDia.length} venta(s) del día ${fecha} eliminada(s)` });
+  return res.json({ mensaje: `${eliminadas} venta(s) del día ${fecha} eliminada(s)` });
 });
 
 // Export day's sales as CSV
@@ -298,20 +299,107 @@ router.get("/:id", async (req, res) => {
 });
 
 // Delete single sale
-router.delete("/:id", requireAdmin, async (req, res) => {
+router.put("/:id", requireAdminOrDavid, async (req, res) => {
+  const parsed = EditarVentaBody.safeParse(req.body);
+  const id = Number(req.params.id);
+  if (!parsed.success || !Number.isInteger(id)) return res.status(400).json({ error: parsed.success ? "ID inválido" : parsed.error.message });
+  const { items } = parsed.data;
+
+  try {
+    const resultado = await db.transaction(async tx => {
+      const [venta] = await tx
+        .select()
+        .from(ventasTable)
+        .where(eq(ventasTable.id, id))
+        .for("update");
+      if (!venta) throw new Error("Venta no encontrada");
+      const anteriores = await tx.select().from(itemsVentaTable).where(eq(itemsVentaTable.ventaId, id));
+      const combosConservados = anteriores
+        .filter(item => item.tipo === "combo")
+        .map(item => ({
+          productoCodigo: item.productoCodigo,
+          productoNombre: item.productoNombre,
+          cantidad: item.cantidad,
+          precioUnitario: item.precioUnitario,
+          precioCosto: item.precioCosto,
+          subtotal: item.subtotal,
+          tipo: item.tipo,
+          comboId: item.comboId,
+          selecciones: item.selecciones,
+        }));
+      if (items.length === 0 && combosConservados.length === 0) {
+        throw new Error("Agregá al menos un producto");
+      }
+      await restaurarStockVenta(tx, venta, anteriores);
+
+      const requeridos = new Map<string, number>();
+      for (const item of items) {
+        if (!Number.isInteger(item.cantidad) || item.cantidad < 1) throw new Error("La cantidad de un producto no es válida");
+        requeridos.set(item.productoCodigo, (requeridos.get(item.productoCodigo) ?? 0) + item.cantidad);
+      }
+      for (const combo of combosConservados) {
+        const selecciones = Array.isArray(combo.selecciones) ? combo.selecciones : [];
+        for (const seleccion of selecciones) {
+          requeridos.set(
+            seleccion.productoCodigo,
+            (requeridos.get(seleccion.productoCodigo) ?? 0) + seleccion.cantidad,
+          );
+        }
+      }
+      const productos = await tx.select().from(productosTable).where(inArray(productosTable.codigo, [...requeridos.keys()]));
+      if (productos.length !== requeridos.size) throw new Error("Uno o más productos ya no existen");
+      const porCodigo = new Map(productos.map(producto => [producto.codigo, producto]));
+      const lineas = items.map(item => {
+        const producto = porCodigo.get(item.productoCodigo)!;
+        const precio = Number(producto.precioVenta);
+        const costo = Number(producto.precioCosto);
+        return { productoCodigo: producto.codigo, productoNombre: producto.nombre, cantidad: item.cantidad, precioUnitario: String(precio), precioCosto: String(costo), subtotal: String(precio * item.cantidad), tipo: "producto", comboId: null, selecciones: [] };
+      });
+      const nuevas = [...lineas, ...combosConservados];
+      for (const [codigo, cantidad] of requeridos) {
+        const producto = porCodigo.get(codigo)!;
+        if (venta.origen === "camioneta") {
+          const [camioneta] = await tx.select({ id: camionetasTable.id }).from(camionetasTable).where(sql`lower(${camionetasTable.nombre}) = lower(${venta.vendedor})`);
+          if (!camioneta) throw new Error("No se encontró la camioneta de la venta");
+          const actualizados = await tx.update(stockCamionetaTable).set({ cantidad: sql`${stockCamionetaTable.cantidad} - ${cantidad}` }).where(and(eq(stockCamionetaTable.camionetaId, camioneta.id), eq(stockCamionetaTable.productoCodigo, codigo), gte(stockCamionetaTable.cantidad, cantidad))).returning({ codigo: stockCamionetaTable.productoCodigo });
+          if (!actualizados.length) throw new Error(`Stock insuficiente para ${producto.nombre}`);
+        } else {
+          const actualizados = await tx.update(productosTable).set({ stock: sql`${productosTable.stock} - ${cantidad}`, actualizadoEn: new Date() }).where(and(eq(productosTable.codigo, codigo), gte(productosTable.stock, cantidad))).returning({ codigo: productosTable.codigo });
+          if (!actualizados.length) throw new Error(`Stock insuficiente para ${producto.nombre}`);
+        }
+      }
+      const total = nuevas.reduce((sum, item) => sum + Number(item.subtotal), 0);
+      const costo = nuevas.reduce((sum, item) => sum + Number(item.precioCosto) * item.cantidad, 0);
+      await tx.delete(itemsVentaTable).where(eq(itemsVentaTable.ventaId, id));
+      await tx.insert(itemsVentaTable).values(nuevas.map(item => ({ ventaId: id, ...item })));
+      const [actualizada] = await tx.update(ventasTable).set({ total: String(total), ganancia: String(total - costo) }).where(eq(ventasTable.id, id)).returning();
+      return actualizada;
+    });
+    return res.json(await ventaConItems(resultado));
+  } catch (error) {
+    return res.status(error instanceof Error && error.message === "Venta no encontrada" ? 404 : 400).json({ error: error instanceof Error ? error.message : "No se pudo editar la venta" });
+  }
+});
+
+router.delete("/:id", requireAdminOrDavid, async (req, res) => {
   const parsed = EliminarVentaParams.safeParse({ id: Number(req.params.id) });
   if (!parsed.success) return res.status(400).json({ error: "ID inválido" });
   const id = parsed.data.id;
 
-  const [venta] = await db.select().from(ventasTable).where(eq(ventasTable.id, id));
-  if (!venta) return res.status(404).json({ error: "Venta no encontrada" });
-
-  await db.transaction(async tx => {
+  const eliminada = await db.transaction(async tx => {
+    const [venta] = await tx
+      .select()
+      .from(ventasTable)
+      .where(eq(ventasTable.id, id))
+      .for("update");
+    if (!venta) return false;
     const items = await tx.select().from(itemsVentaTable).where(eq(itemsVentaTable.ventaId, id));
     await restaurarStockVenta(tx, venta, items);
     await tx.delete(itemsVentaTable).where(eq(itemsVentaTable.ventaId, id));
     await tx.delete(ventasTable).where(eq(ventasTable.id, id));
+    return true;
   });
+  if (!eliminada) return res.status(404).json({ error: "Venta no encontrada" });
 
   return res.json({ mensaje: "Venta eliminada" });
 });

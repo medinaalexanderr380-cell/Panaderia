@@ -422,6 +422,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Venta"
+    put:
+      operationId: editarVenta
+      tags: [ventas]
+      summary: Replace sale products and quantities
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EditarVentaBody"
+      responses:
+        "200":
+          description: Updated sale
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Venta"
     delete:
       operationId: eliminarVenta
       tags: [ventas]
@@ -916,6 +939,19 @@ components:
           items:
             $ref: "#/components/schemas/ComboVentaInput"
       required: [vendedor, items]
+
+    EditarVentaBody:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ItemVentaInput"
+        combos:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComboVentaInput"
+      required: [items]
 
     ItemVentaInput:
       type: object

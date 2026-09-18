@@ -18,8 +18,8 @@ import {
   EliminarProductoResponse,
 } from "@workspace/api-zod";
 import {
-  requireAdmin,
-  requireAdminOrDavidForPrices,
+  requireAdminOrDavid,
+  requireAdminOrDavidOrAuthorized,
   requireAuth,
   type AuthenticatedSession,
 } from "../middleware/auth";
@@ -57,7 +57,7 @@ router.get("/", async (req, res) => {
   })));
 });
 
-router.post("/", requireAdmin, async (req, res) => {
+router.post("/", requireAdminOrDavid, async (req, res) => {
   const parsed = CrearProductoBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
 
@@ -120,29 +120,18 @@ router.get("/:codigo", async (req, res) => {
   });
 });
 
-router.put("/:codigo", requireAdminOrDavidForPrices, async (req, res) => {
+router.put("/:codigo", requireAdminOrDavidOrAuthorized, async (req, res) => {
   const paramParsed = ActualizarProductoParams.safeParse({ codigo: req.params.codigo });
   if (!paramParsed.success) return res.status(400).json({ error: "Código inválido" });
   const bodyParsed = ActualizarProductoBody.safeParse(req.body);
   if (!bodyParsed.success) return res.status(400).json({ error: bodyParsed.error.message });
 
   const session = req.session as unknown as AuthenticatedSession;
-  const puedeEditarProductoCompleto =
-    session.rol === "admin" || session.adminActionAuthorized === true;
   if (session.adminActionAuthorized) {
     session.adminActionAuthorized = false;
   }
-  const updateData: Record<string, unknown> = puedeEditarProductoCompleto
-    ? { ...bodyParsed.data, actualizadoEn: new Date() }
-    : { actualizadoEn: new Date() };
 
-  if (
-    !puedeEditarProductoCompleto
-    && bodyParsed.data.precioVenta === undefined
-    && bodyParsed.data.precioCosto === undefined
-  ) {
-    return res.status(400).json({ error: "David solo puede actualizar los precios del producto" });
-  }
+  const updateData: Record<string, unknown> = { ...bodyParsed.data, actualizadoEn: new Date() };
 
   if (bodyParsed.data.precioVenta !== undefined) updateData.precioVenta = String(bodyParsed.data.precioVenta);
   if (bodyParsed.data.precioCosto !== undefined) updateData.precioCosto = String(bodyParsed.data.precioCosto);
@@ -171,7 +160,7 @@ router.put("/:codigo", requireAdminOrDavidForPrices, async (req, res) => {
   });
 });
 
-router.delete("/:codigo", requireAdmin, async (req, res): Promise<void> => {
+router.delete("/:codigo", requireAdminOrDavid, async (req, res): Promise<void> => {
   const parsed = EliminarProductoParams.safeParse({ codigo: req.params.codigo });
   if (!parsed.success) {
     res.status(400).json({ error: "Código inválido" });

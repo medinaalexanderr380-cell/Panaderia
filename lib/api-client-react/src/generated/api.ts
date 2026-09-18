@@ -25,6 +25,7 @@ import type {
   Compra,
   CrearProductoBody,
   CrearProveedorBody,
+  EditarVentaBody,
   ErrorResponse,
   HealthStatus,
   ListarComprasParams,
@@ -1747,6 +1748,93 @@ export function useObtenerVenta<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Replace sale products and quantities
+ */
+export const getEditarVentaUrl = (id: number) => {
+  return `/api/ventas/${id}`;
+};
+
+export const editarVenta = async (
+  id: number,
+  editarVentaBody: EditarVentaBody,
+  options?: RequestInit,
+): Promise<Venta> => {
+  return customFetch<Venta>(getEditarVentaUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(editarVentaBody),
+  });
+};
+
+export const getEditarVentaMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof editarVenta>>,
+    TError,
+    { id: number; data: BodyType<EditarVentaBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof editarVenta>>,
+  TError,
+  { id: number; data: BodyType<EditarVentaBody> },
+  TContext
+> => {
+  const mutationKey = ["editarVenta"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof editarVenta>>,
+    { id: number; data: BodyType<EditarVentaBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return editarVenta(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EditarVentaMutationResult = NonNullable<
+  Awaited<ReturnType<typeof editarVenta>>
+>;
+export type EditarVentaMutationBody = BodyType<EditarVentaBody>;
+export type EditarVentaMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Replace sale products and quantities
+ */
+export const useEditarVenta = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof editarVenta>>,
+    TError,
+    { id: number; data: BodyType<EditarVentaBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof editarVenta>>,
+  TError,
+  { id: number; data: BodyType<EditarVentaBody> },
+  TContext
+> => {
+  return useMutation(getEditarVentaMutationOptions(options));
+};
 
 /**
  * @summary Delete a single sale by id

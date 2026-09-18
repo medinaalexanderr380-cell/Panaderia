@@ -164,7 +164,8 @@ export default function Productos() {
         || rest.unidad !== editingProducto.unidad
         || (proveedorId ?? null) !== (editingProducto.proveedorId ?? null);
 
-      if (user?.rol !== "admin" && cambiaDatosProtegidos) {
+      const esDavid = user?.username?.trim().toLowerCase() === "david";
+      if (user?.rol !== "admin" && !esDavid && cambiaDatosProtegidos) {
         setPendingUpdate(update);
         setAdminPassword("");
         setAdminPasswordOpen(true);
@@ -297,6 +298,17 @@ export default function Productos() {
                     <FormItem className="col-span-1">
                       <FormLabel>Precio Venta</FormLabel>
                       <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="stock"
+                  render={({ field }) => (
+                    <FormItem className="col-span-1">
+                      <FormLabel>Stock actual</FormLabel>
+                      <FormControl><Input type="number" min="0" step="1" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

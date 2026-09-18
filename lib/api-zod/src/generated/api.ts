@@ -477,6 +477,64 @@ export const ObtenerVentaResponse = zod.object({
 });
 
 /**
+ * @summary Replace sale products and quantities
+ */
+export const EditarVentaParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const EditarVentaBody = zod.object({
+  items: zod.array(
+    zod.object({
+      productoCodigo: zod.string(),
+      cantidad: zod.number(),
+    }),
+  ),
+  combos: zod
+    .array(
+      zod.object({
+        comboId: zod.number(),
+        selecciones: zod.array(
+          zod.object({
+            productoCodigo: zod.string(),
+            cantidad: zod.number().min(1),
+          }),
+        ),
+      }),
+    )
+    .optional(),
+});
+
+export const EditarVentaResponse = zod.object({
+  id: zod.number(),
+  vendedor: zod.string(),
+  fecha: zod.string(),
+  total: zod.number(),
+  ganancia: zod.number(),
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      ventaId: zod.number(),
+      productoCodigo: zod.string(),
+      productoNombre: zod.string(),
+      cantidad: zod.number(),
+      precioUnitario: zod.number(),
+      precioCosto: zod.number(),
+      subtotal: zod.number(),
+      tipo: zod.enum(["producto", "combo"]),
+      comboId: zod.number().nullable(),
+      selecciones: zod.array(
+        zod.object({
+          productoCodigo: zod.string(),
+          productoNombre: zod.string(),
+          cantidad: zod.number(),
+        }),
+      ),
+    }),
+  ),
+});
+
+/**
  * @summary Delete a single sale by id
  */
 export const EliminarVentaParams = zod.object({

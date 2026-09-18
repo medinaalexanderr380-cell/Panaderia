@@ -8,11 +8,14 @@ import {
   getListarDiasConVentasQueryKey,
   useEliminarVenta,
   useEliminarVentasDia,
+  useEditarVenta,
+  getListarProductosQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -30,7 +33,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
-  ShoppingCart, User, Search, Trash2, Calendar, Receipt,
+  ShoppingCart, User, Search, Trash2, Calendar, Receipt, Pencil,
   ChevronDown, ChevronRight, Download, TrendingUp, Printer,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -391,6 +394,9 @@ function DiaGroup({ dia }: { dia: { fecha: string; totalVentas: number; totalGan
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ type: "venta" | "dia"; id?: number; label: string } | null>(null);
   const [ticketData, setTicketData] = useState<TicketData | null>(null);
+  const [editingVenta, setEditingVenta] = useState<any | null>(null);
+  const [editItems, setEditItems] = useState<Array<{ productoCodigo: string; cantidad: number }>>([]);
+  const { data: productos } = useListarProductos();
 
   const eliminarVenta = useEliminarVenta({
     mutation: {
@@ -413,6 +419,26 @@ function DiaGroup({ dia }: { dia: { fecha: string; totalVentas: number; totalGan
       onError: () => toast({ title: "Error al eliminar", variant: "destructive" }),
     },
   });
+  const editarVenta = useEditarVenta({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListarDiasConVentasQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListarProductosQueryKey() });
+        queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === "camioneta" });
+        toast({ title: "Venta actualizada" });
+        setEditingVenta(null);
+      },
+      onError: (err: any) => toast({ title: "Error al editar", description: err?.response?.data?.error, variant: "destructive" }),
+    },
+  });
+
+  const openEdit = (venta: any) => {
+    setEditingVenta(venta);
+    setEditItems((venta.items ?? []).filter((item: any) => item.tipo === "producto").map((item: any) => ({
+      productoCodigo: item.productoCodigo,
+      cantidad: item.cantidad,
+    })));
+  };
 
   const handleDownload = () => {
     const url = `/api/ventas/dia/${dia.fecha}/exportar`;
@@ -554,6 +580,14 @@ function DiaGroup({ dia }: { dia: { fecha: string; totalVentas: number; totalGan
                           >
                             <Printer className="h-3.5 w-3.5" />
                           </Button>
+                           <Button
+                             variant="ghost" size="icon"
+                             className="h-7 w-7 text-muted-foreground hover:text-primary"
+                             title="Editar productos y cantidades"
+                             onClick={() => openEdit(venta)}
+                           >
+                             <Pencil className="h-3.5 w-3.5" />
+                           </Button>
                           <Button
                             variant="ghost" size="icon"
                             className="h-7 w-7 text-muted-foreground hover:text-destructive"
@@ -579,6 +613,55 @@ function DiaGroup({ dia }: { dia: { fecha: string; totalVentas: number; totalGan
           </CollapsibleContent>
         </div>
       </Collapsible>
+
+      <Dialog open={!!editingVenta} onOpenChange={(open) => !open && setEditingVenta(null)}>
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar venta #{editingVenta?.id}</DialogTitle>
+            <DialogDescription>
+              Cambiá los productos o cantidades. El stock y los totales se actualizarán automáticamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {editItems.map((item, index) => (
+              <div key={index} className="grid grid-cols-[minmax(0,1fr)_4.5rem_2.5rem] gap-2 items-center">
+                <select
+                  className="h-10 min-w-0 w-full rounded-md border bg-background px-2 text-sm"
+                  value={item.productoCodigo}
+                  onChange={(e) => setEditItems(current => current.map((line, i) => i === index ? { ...line, productoCodigo: e.target.value } : line))}
+                >
+                  {(productos ?? []).map(producto => <option key={producto.codigo} value={producto.codigo}>{producto.codigo} — {producto.nombre}</option>)}
+                </select>
+                <Input
+                  className="w-20"
+                  type="number" min={1} value={item.cantidad}
+                  onChange={(e) => setEditItems(current => current.map((line, i) => i === index ? { ...line, cantidad: Math.max(1, Number(e.target.value) || 1) } : line))}
+                />
+                <Button variant="ghost" size="icon" onClick={() => setEditItems(current => current.filter((_, i) => i !== index))}><Trash2 className="h-4 w-4" /></Button>
+              </div>
+            ))}
+            <Button variant="outline" className="w-full" onClick={() => setEditItems(current => [...current, { productoCodigo: productos?.[0]?.codigo ?? "", cantidad: 1 }])} disabled={!productos?.length}>
+              Agregar producto
+            </Button>
+            {(editingVenta?.items ?? []).some((item: any) => item.tipo === "combo") && (
+              <p className="text-xs text-muted-foreground">Los combos existentes se conservan al editar esta venta.</p>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setEditingVenta(null)}>Cancelar</Button>
+            <Button disabled={editarVenta.isPending || editItems.length === 0} onClick={() => editarVenta.mutate({
+              id: editingVenta.id,
+              data: {
+                items: editItems,
+                combos: (editingVenta.items ?? []).filter((item: any) => item.tipo === "combo").map((item: any) => ({
+                  comboId: item.comboId,
+                  selecciones: item.selecciones.map((selection: any) => ({ productoCodigo: selection.productoCodigo, cantidad: selection.cantidad })),
+                })),
+              },
+            })}>{editarVenta.isPending ? "Guardando..." : "Guardar cambios"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirm dialog */}
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>

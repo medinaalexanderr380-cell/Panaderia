@@ -153,6 +153,11 @@ export interface RegistrarVentaBody {
   combos?: ComboVentaInput[];
 }
 
+export interface EditarVentaBody {
+  items: ItemVentaInput[];
+  combos?: ComboVentaInput[];
+}
+
 export interface ItemCompra {
   id: number;
   compraId: number;

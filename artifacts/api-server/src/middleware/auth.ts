@@ -62,6 +62,33 @@ export function requireAdminOrDavidForPrices(req: Request, res: Response, next: 
   next();
 }
 
+export function requireAdminOrDavid(req: Request, res: Response, next: NextFunction) {
+  const session = getAuthenticatedSession(req);
+  if (!session.userId || !session.username) {
+    res.status(401).json({ error: "No autenticado" });
+    return;
+  }
+  if (session.rol !== "admin" && session.username.trim().toLowerCase() !== "david") {
+    res.status(403).json({ error: "Solo un administrador o David puede realizar esta acción" });
+    return;
+  }
+  next();
+}
+
+export function requireAdminOrDavidOrAuthorized(req: Request, res: Response, next: NextFunction) {
+  const session = getAuthenticatedSession(req);
+  if (!session.userId || !session.username) {
+    res.status(401).json({ error: "No autenticado" });
+    return;
+  }
+  const esDavid = session.username.trim().toLowerCase() === "david";
+  if (session.rol !== "admin" && !esDavid && session.adminActionAuthorized !== true) {
+    res.status(403).json({ error: "Ingresá la contraseña del administrador para realizar este cambio" });
+    return;
+  }
+  next();
+}
+
 /**
  * Authorizes an operation against a delivery vehicle.
  *
