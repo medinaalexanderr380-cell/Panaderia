@@ -37,7 +37,8 @@ jobs:
           cache: 'pnpm'
           
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --config.ignored-builds=false
+        
         
       - name: Build project
         run: pnpm run build:prod
