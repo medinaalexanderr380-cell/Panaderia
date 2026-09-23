@@ -36,9 +36,9 @@ jobs:
           node-version: 20
           cache: 'pnpm'
           
+  
       - name: Install dependencies
-        run: pnpm install --config.ignored-builds=false
-        
+        run: pnpm install --unsafe-perm=true
         
       - name: Build project
         run: pnpm run build:prod
