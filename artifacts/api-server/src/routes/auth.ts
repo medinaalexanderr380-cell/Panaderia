@@ -9,7 +9,7 @@ const router = Router();
 
 router.post("/auto-login", async (req, res) => {
   const usuarios = await db.select().from(usuariosTable);
-  const usuario = usuarios.find((u) => u.activo && u.rol !== "admin");
+  const usuario = usuarios.find((u) => u.rol !== "vendedor");
 
   if (!usuario) {
     return res.status(503).json({ error: "No hay un usuario vendedor activo disponible" });
