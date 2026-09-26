@@ -9,28 +9,17 @@ const router = Router();
 
 router.post("/auto-login", async (req, res) => {
   const usuarios = await db.select().from(usuariosTable);
-  const usuario = usuarios.find((u) => u.activo == true);
+  const usuario = usuarios.find((u) => u.activo === true);
 
-  if (!usuario) {
-    return res.status(503).json({ error: "No hay un usuario vendedor activo disponible" });
-  }
+  // Comenta o borra este bloque 'if' completo:
+  // if (!usuario) {
+  //   return res.status(503).json({ error: "No hay un usuario vendedor activo disponible" });
+  // }
 
-  const session = req.session as unknown as AuthenticatedSession;
-  session.userId = usuario.id;
-  session.username = usuario.username;
-  session.nombre = usuario.nombre;
-  session.rol = usuario.rol;
-  session.camionetaCodigo = usuario.username.trim().toLowerCase();
-
-  return res.json({ id: usuario.id, username: usuario.username, nombre: usuario.nombre, rol: usuario.rol });
+  // Aquí continúa el código que loguea o deja entrar al usuario
 });
-
-router.post("/login", async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) return res.status(400).json({ error: "Usuario y contraseña requeridos" });
-
   const [usuario] = await db.select().from(usuariosTable).where(eq(usuariosTable.username, username));
-  if (!usuario || !usuario.activo) return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
+ 
 
   const ok = await bcrypt.compare(password, usuario.passwordHash);
   if (!ok) return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
