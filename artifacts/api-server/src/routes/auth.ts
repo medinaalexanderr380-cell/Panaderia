@@ -9,20 +9,11 @@ const router = Router();
 
 router.post("/auto-login", async (req, res) => {
   const usuarios = await db.select().from(usuariosTable);
-  const usuario = usuarios.find((u) => u.activo === true);
+  const usuario = usuarios[0]; // Toma el primer usuario disponible de la tabla
 
-  // Comenta o borra este bloque 'if' completo:
-  // if (!usuario) {
-  //   return res.status(503).json({ error: "No hay un usuario vendedor activo disponible" });
-  // }
-
-  // Aquí continúa el código que loguea o deja entrar al usuario
-
-  const [usuario] = await db.select().from(usuariosTable).where(eq(usuariosTable.username, username));
- 
-
-  const ok = await bcrypt.compare(password, usuario.passwordHash);
-  if (!ok) return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
+  if (!usuario) {
+    return res.status(404).json({ error: "No hay usuarios registrados en la base de datos" });
+  }
 
   const session = req.session as unknown as AuthenticatedSession;
   session.userId = usuario.id;
@@ -31,7 +22,8 @@ router.post("/auto-login", async (req, res) => {
   session.rol = usuario.rol;
   session.camionetaCodigo = usuario.rol === "admin" ? undefined : usuario.username.trim().toLowerCase();
 
- 
+  return res.json({ id: usuario.id, username: usuario.username, nombre: usuario.nombre, rol: usuario.rol });
+});
 
 router.post("/logout", (req, res) => {
   req.session.destroy(() => {
@@ -58,7 +50,7 @@ router.post("/verify-admin-password", async (req, res) => {
   }
 
   const usuarios = await db.select().from(usuariosTable);
-  const administradores = usuarios.filter((usuario) => usuario.activo && usuario.rol === "admin");
+  const administradores = usuarios.filter((u) => u.rol === "admin");
   const verificaciones = await Promise.all(
     administradores.map((administrador) => bcrypt.compare(password, administrador.passwordHash)),
   );
@@ -74,15 +66,13 @@ router.post("/verify-admin-password", async (req, res) => {
 router.post("/verify", async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: "Usuario y contraseña requeridos" });
+  
   const [usuario] = await db.select().from(usuariosTable).where(eq(usuariosTable.username, username));
-  if (!usuario || !usuario.activo) return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
+  if (!usuario) return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
+  
   const ok = await bcrypt.compare(password, usuario.passwordHash);
   if (!ok) return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
-  // This verification is used immediately before a truck operation. Store
-  // the verified identity server-side; the following mutation must not trust
-  // the vehicle name sent by the browser as its authorization source. An
-  // existing administrator session already has cross-vehicle permission, so
-  // verifying a driver's password must never downgrade that session.
+
   const session = req.session as unknown as AuthenticatedSession;
   if (session.userId && session.rol === "admin") {
     return res.json({ valido: true, nombre: usuario.nombre });
@@ -92,7 +82,7 @@ router.post("/verify", async (req, res) => {
   session.username = usuario.username;
   session.nombre = usuario.nombre;
   session.rol = usuario.rol;
-  session.camionetaCodigo = usuario.rol === "admin" ? undefined : usuario.username.trim().toLowerCase();
+  session.camionetaCodigo = session.rol === "admin" ? undefined : usuario.username.trim().toLowerCase();
 
   return res.json({ valido: true, nombre: usuario.nombre });
 });
