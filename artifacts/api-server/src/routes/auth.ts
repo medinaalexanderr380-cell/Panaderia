@@ -32,7 +32,6 @@ router.post("/auto-login", async (req, res) => {
   session.camionetaCodigo = usuario.rol === "admin" ? undefined : usuario.username.trim().toLowerCase();
 
   return res.json({ id: usuario.id, username: usuario.username });
-});
 
 router.post("/logout", (req, res) => {
   req.session.destroy(() => {
