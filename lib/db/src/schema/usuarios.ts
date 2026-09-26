@@ -5,8 +5,9 @@ import { z } from "zod/v4";
 export const usuariosTable = pgTable("usuarios", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
-  nombre: text("nombre").notNull(),
-  passwordHash: text("password_hash").notNull(),
+  nombre: text("nombre"), // Quítale el .notNull() por si acaso está vacío en la base
+  passwordHash: text("password_hash"),
+  clave_venta: text("clave_venta").notNull(), // <-- Agrega esta línea que te falta
   rol: text("rol").notNull().default("vendedor"),
   activo: boolean("activo").notNull().default(true),
   creadoEn: timestamp("creado_en").notNull().defaultNow(),
