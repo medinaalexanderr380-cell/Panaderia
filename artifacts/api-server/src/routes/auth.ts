@@ -17,7 +17,7 @@ router.post("/auto-login", async (req, res) => {
   // }
 
   // Aquí continúa el código que loguea o deja entrar al usuario
-});
+
   const [usuario] = await db.select().from(usuariosTable).where(eq(usuariosTable.username, username));
  
 
